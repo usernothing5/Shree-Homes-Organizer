@@ -22,3 +22,7 @@ export interface CallLog {
   notes?: string;
   followUpCount?: number;
 }
+
+export interface User {
+  email: string;
+}
