@@ -6,9 +6,11 @@ interface HeaderProps {
   activeProject: Project | undefined;
   onSwitchProject: (id: string) => void;
   onManageProjects: () => void;
+  isDirty: boolean;
+  onSave: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects }) => {
+const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects, isDirty, onSave }) => {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +35,19 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
         </div>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={onSave}
+            disabled={!isDirty}
+            aria-live="polite"
+            className={`font-medium py-2 px-4 rounded-md transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-white ${
+              isDirty
+                ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md animate-pulse-slow'
+                : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            {isDirty ? 'Save Changes' : 'Saved'}
+          </button>
+
           <div className="relative" ref={projectDropdownRef}>
             <button 
               onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}

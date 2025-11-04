@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { usePersistentState } from './hooks/usePersistentState';
 import { CallLog, CallStatus, Project } from './types';
 import Header from './components/Header';
 import CallLogger from './components/CallLogger';
@@ -24,9 +24,9 @@ type LogUpdatePayload = {
 };
 
 const CrmApp: React.FC = () => {
-  const [projects, setProjects] = useLocalStorage<Project[]>('projects', []);
-  const [activeProjectId, setActiveProjectId] = useLocalStorage<string | null>('activeProjectId', null);
-  const [callLogs, setCallLogs] = useLocalStorage<CallLog[]>('callLogs', []);
+  const [projects, setProjects, isProjectsDirty, saveProjects] = usePersistentState<Project[]>('projects', []);
+  const [activeProjectId, setActiveProjectId, isActiveProjectIdDirty, saveActiveProjectId] = usePersistentState<string | null>('activeProjectId', null);
+  const [callLogs, setCallLogs, areCallLogsDirty, saveCallLogs] = usePersistentState<CallLog[]>('callLogs', []);
   
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
@@ -38,6 +38,33 @@ const CrmApp: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
 
+  // Combine dirty flags into a single app-wide status
+  const isAppDirty = isProjectsDirty || isActiveProjectIdDirty || areCallLogsDirty;
+
+  // Function to save all changes across the app
+  const saveAllChanges = useCallback(() => {
+    saveProjects();
+    saveActiveProjectId();
+    saveCallLogs();
+  }, [saveProjects, saveActiveProjectId, saveCallLogs]);
+
+  // Warn user about unsaved changes before leaving the page
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (isAppDirty) {
+        event.preventDefault();
+        // Standard for most browsers requires setting returnValue.
+        // The custom message is often ignored in favor of a generic browser message.
+        event.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isAppDirty]);
 
   // Initialize default project or correct an invalid active project ID
   useEffect(() => {
@@ -352,6 +379,8 @@ const CrmApp: React.FC = () => {
           activeProject={activeProject}
           onSwitchProject={handleSwitchProject}
           onManageProjects={() => setIsManageProjectsModalOpen(true)}
+          isDirty={isAppDirty}
+          onSave={saveAllChanges}
         />
         <main className="p-4 sm:p-6 lg:p-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
