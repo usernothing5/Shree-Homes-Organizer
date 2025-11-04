@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { CallLog, CallStatus, Project, User } from './types';
+import { CallLog, CallStatus, Project } from './types';
 import Header from './components/Header';
 import CallLogger from './components/CallLogger';
 import Stats from './components/Stats';
@@ -15,6 +14,7 @@ import EditNotesModal from './components/EditNotesModal';
 import UpdateDetailsShareModal from './components/UpdateDetailsShareModal';
 import DataImporter from './components/DataImporter';
 import ImportStatusModal, { ImportResults } from './components/ImportStatusModal';
+import WebHostingModal from './components/WebHostingModal';
 
 
 type LogUpdatePayload = {
@@ -23,19 +23,15 @@ type LogUpdatePayload = {
   callbackTime?: string;
 };
 
-interface CrmAppProps {
-  user: User;
-  onLogout: () => void;
-}
-
-const CrmApp: React.FC<CrmAppProps> = ({ user, onLogout }) => {
-  const [projects, setProjects] = useLocalStorage<Project[]>(`projects_${user.email}`, []);
-  const [activeProjectId, setActiveProjectId] = useLocalStorage<string | null>(`activeProjectId_${user.email}`, null);
-  const [callLogs, setCallLogs] = useLocalStorage<CallLog[]>(`callLogs_${user.email}`, []);
+const CrmApp: React.FC = () => {
+  const [projects, setProjects] = useLocalStorage<Project[]>('projects', []);
+  const [activeProjectId, setActiveProjectId] = useLocalStorage<string | null>('activeProjectId', null);
+  const [callLogs, setCallLogs] = useLocalStorage<CallLog[]>('callLogs', []);
   
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
   const [isManageProjectsModalOpen, setIsManageProjectsModalOpen] = useState(false);
+  const [isWebHostingModalOpen, setIsWebHostingModalOpen] = useState(false);
 
   const [logToUpdate, setLogToUpdate] = useState<{ log: CallLog; type: 'details-share' | 'edit-notes' } | null>(null);
 
@@ -313,6 +309,9 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onLogout }) => {
           onClose={() => setIsManageProjectsModalOpen(false)}
         />
       )}
+      {isWebHostingModalOpen && (
+        <WebHostingModal onClose={() => setIsWebHostingModalOpen(false)} />
+      )}
       {importResults && (
         <ImportStatusModal
           results={importResults}
@@ -349,8 +348,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onLogout }) => {
 
       <div className={`${activeCallback && !isResolveModalOpen ? 'pt-16' : ''}`}>
         <Header 
-          userEmail={user.email}
-          onLogout={onLogout}
           projects={projects}
           activeProject={activeProject}
           onSwitchProject={handleSwitchProject}
@@ -367,6 +364,26 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onLogout }) => {
                 onUpdate={(log) => setLogToUpdate({ log, type: 'details-share' })} 
               />
               <DataImporter onFileImport={handleFileImport} isImporting={isImporting} />
+              <div className="bg-white p-6 rounded-lg shadow-md">
+                <h2 className="text-xl font-bold mb-4 text-slate-700">Publish & Share</h2>
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-slate-600">Publish to the Web</h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Make your CRM accessible from any device by deploying it to a secure, private web link for free.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsWebHostingModalOpen(true)}
+                    className="w-full flex justify-center items-center gap-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    Publish App
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="lg:col-span-2">
               <CallList 

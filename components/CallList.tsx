@@ -134,14 +134,26 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
 
 const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNotes, onUpdateFollowUpCount }) => {
   const [view, setView] = useState<'today' | 'history'>('today');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredLogs = useMemo(() => {
+    if (!searchQuery.trim()) {
+        return callLogs;
+    }
+    const lowercasedQuery = searchQuery.toLowerCase();
+    return callLogs.filter(log => 
+        log.clientName.toLowerCase().includes(lowercasedQuery) ||
+        (log.clientPhone && log.clientPhone.replace(/\s+/g, '').includes(lowercasedQuery.replace(/\s+/g, '')))
+    );
+  }, [callLogs, searchQuery]);
   
-  const todaysLogs = useMemo(() => callLogs.filter(log => isToday(new Date(log.timestamp))), [callLogs]);
+  const todaysLogs = useMemo(() => filteredLogs.filter(log => isToday(new Date(log.timestamp))), [filteredLogs]);
 
   const historicalLogsByDate = useMemo(() => {
     const groups: { [key: string]: CallLog[] } = {};
     const todayString = new Date().toISOString().split('T')[0];
 
-    callLogs.forEach(log => {
+    filteredLogs.forEach(log => {
       const logDate = new Date(log.timestamp);
       const dateString = logDate.toISOString().split('T')[0];
 
@@ -155,28 +167,45 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
 
     return Object.entries(groups)
       .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime());
-  }, [callLogs]);
+  }, [filteredLogs]);
   
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4">
         <h2 className="text-xl font-bold text-slate-700">
           {view === 'today' ? "Today's Call Logs" : "Call Log History"}
         </h2>
-        <div className="flex items-center bg-slate-200 rounded-full p-1 text-sm">
-            <button
-              onClick={() => setView('today')}
-              className={`px-3 py-1 rounded-full transition-colors ${view === 'today' ? 'bg-white text-slate-800 shadow' : 'text-slate-600 hover:bg-slate-300'}`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setView('history')}
-              className={`px-3 py-1 rounded-full transition-colors ${view === 'history' ? 'bg-white text-slate-800 shadow' : 'text-slate-600 hover:bg-slate-300'}`}
-            >
-              History
-            </button>
-          </div>
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+            <div className="relative w-full sm:w-auto">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                    </svg>
+                </span>
+                <input
+                    type="text"
+                    placeholder="Search name or phone..."
+                    aria-label="Search call logs"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="block w-full sm:w-64 pl-10 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 sm:text-sm transition"
+                />
+            </div>
+            <div className="flex items-center bg-slate-200 rounded-full p-1 text-sm self-end sm:self-center">
+                <button
+                onClick={() => setView('today')}
+                className={`px-3 py-1 rounded-full transition-colors ${view === 'today' ? 'bg-white text-slate-800 shadow' : 'text-slate-600 hover:bg-slate-300'}`}
+                >
+                Today
+                </button>
+                <button
+                onClick={() => setView('history')}
+                className={`px-3 py-1 rounded-full transition-colors ${view === 'history' ? 'bg-white text-slate-800 shadow' : 'text-slate-600 hover:bg-slate-300'}`}
+                >
+                History
+                </button>
+            </div>
+        </div>
       </div>
       <div className="overflow-x-auto">
         {view === 'today' && (
@@ -202,7 +231,9 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
               <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="mt-2 text-sm text-slate-500">No calls logged for today yet.</p>
+              <p className="mt-2 text-sm text-slate-500">
+                {searchQuery ? `No logs found matching "${searchQuery}".` : 'No calls logged for today yet.'}
+              </p>
             </div>
           )
         )}
@@ -238,7 +269,9 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
-              <p className="mt-2 text-sm text-slate-500">No past call logs found.</p>
+              <p className="mt-2 text-sm text-slate-500">
+                {searchQuery ? `No logs found matching "${searchQuery}".` : 'No past call logs found.'}
+              </p>
             </div>
           )
         )}
