@@ -12,9 +12,10 @@ import ManageProjectsModal from './components/ManageProjectsModal';
 import PendingFollowUps from './components/PendingFollowUps';
 import EditNotesModal from './components/EditNotesModal';
 import UpdateDetailsShareModal from './components/UpdateDetailsShareModal';
-import DataImporter from './components/DataImporter';
+import DataManagement from './components/DataManagement';
 import ImportStatusModal, { ImportResults } from './components/ImportStatusModal';
 import ImportReviewModal from './components/ImportReviewModal';
+import ShareModal from './components/ShareModal';
 
 
 type LogUpdatePayload = {
@@ -22,6 +23,45 @@ type LogUpdatePayload = {
   notes?: string;
   callbackTime?: string;
 };
+
+// --- Data Compression Utilities ---
+
+// Helper to convert an ArrayBuffer to a Base64 string
+const bufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+};
+
+// Helper to convert a Base64 string to an ArrayBuffer
+const base64ToBuffer = (base64: string): ArrayBuffer => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+};
+
+// Compresses a string using the browser's GZIP compression and encodes it to Base64
+async function compressAndEncode(dataString: string): Promise<string> {
+  const stream = new Blob([dataString], { type: 'text/plain' }).stream();
+  const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+  const compressedData = await new Response(compressedStream).arrayBuffer();
+  return bufferToBase64(compressedData);
+}
+
+// Decodes a Base64 string and decompresses it using the browser's GZIP decompression
+async function decodeAndDecompress(base64String: string): Promise<string> {
+  const buffer = base64ToBuffer(base64String);
+  const stream = new Blob([buffer], { type: 'application/octet-stream' }).stream();
+  const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+  return await new Response(decompressedStream).text();
+}
+
 
 const CrmApp: React.FC = () => {
   const [projects, setProjects, isProjectsDirty, saveProjects, syncProjects] = usePersistentState<Project[]>('projects', []);
@@ -38,27 +78,40 @@ const CrmApp: React.FC = () => {
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
   const [stagedImportResults, setStagedImportResults] = useState<ImportResults | null>(null);
   const [logsForReview, setLogsForReview] = useState<IncompleteLog[] | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
 
   // Load data from URL hash on initial load
   useEffect(() => {
     const hash = window.location.hash;
-    if (hash.startsWith('#data=')) {
-        try {
-            const encodedData = hash.substring(6);
-            const decodedData = atob(encodedData);
-            const { projects: loadedProjects, callLogs: loadedCallLogs, activeProjectId: loadedActiveProjectId } = JSON.parse(decodedData);
+    if (hash.startsWith('#d=') || hash.startsWith('#data=')) {
+        const loadData = async () => {
+          try {
+              let decodedData: string;
+              if (hash.startsWith('#d=')) { // New compressed format
+                  const encodedData = hash.substring(3);
+                  decodedData = await decodeAndDecompress(encodedData);
+              } else { // Old uncompressed format (for backward compatibility)
+                  const encodedData = hash.substring(6);
+                  decodedData = atob(encodedData);
+              }
+              
+              const { projects: loadedProjects, callLogs: loadedCallLogs, activeProjectId: loadedActiveProjectId } = JSON.parse(decodedData);
 
-            if (Array.isArray(loadedProjects) && Array.isArray(loadedCallLogs)) {
-                syncProjects(loadedProjects);
-                syncCallLogs(loadedCallLogs);
-                syncActiveProjectId(loadedActiveProjectId ?? loadedProjects[0]?.id ?? null);
-            }
-            // Clear hash after loading
-            window.history.replaceState(null, "", window.location.pathname + window.location.search);
-        } catch (e) {
-            console.error("Failed to parse data from URL hash", e);
-            alert("Could not load data from the link. It may be corrupted or invalid.");
-        }
+              if (Array.isArray(loadedProjects) && Array.isArray(loadedCallLogs)) {
+                  syncProjects(loadedProjects);
+                  syncCallLogs(loadedCallLogs);
+                  syncActiveProjectId(loadedActiveProjectId ?? loadedProjects[0]?.id ?? null);
+              }
+              // Clear hash after loading
+              window.history.replaceState(null, "", window.location.pathname + window.location.search);
+              alert("Data loaded successfully from the link!");
+          } catch (e) {
+              console.error("Failed to parse data from URL hash", e);
+              alert("Could not load data from the link. It may be corrupted, invalid, or created with an incompatible version.");
+          }
+        };
+        loadData();
     }
   }, [syncProjects, syncCallLogs, syncActiveProjectId]);
 
@@ -242,6 +295,25 @@ const CrmApp: React.FC = () => {
         log.id === logId ? { ...log, followUpCount: count >= 0 ? count : 0 } : log
       )
     );
+  };
+
+  const handleShareData = async () => {
+    saveAllChanges(); // Ensure we're sharing the latest saved state
+    const dataToShare = {
+        projects,
+        callLogs,
+        activeProjectId
+    };
+    try {
+        const jsonString = JSON.stringify(dataToShare);
+        const compressedEncodedData = await compressAndEncode(jsonString);
+        const url = `${window.location.origin}${window.location.pathname}#d=${compressedEncodedData}`;
+        setShareUrl(url);
+        setIsShareModalOpen(true);
+    } catch (e) {
+        console.error("Failed to compress data for sharing:", e);
+        alert("Could not create share link due to a browser compatibility issue. Please try using a modern browser like Chrome, Firefox, or Safari.");
+    }
   };
 
   const handleFileImport = async (file: File) => {
@@ -439,6 +511,12 @@ const CrmApp: React.FC = () => {
           onClose={() => setImportResults(null)}
         />
       )}
+       {isShareModalOpen && (
+        <ShareModal 
+          shareUrl={shareUrl}
+          onClose={() => setIsShareModalOpen(false)}
+        />
+      )}
       {activeCallback && !isResolveModalOpen && (
         <NotificationBanner
           callLog={activeCallback}
@@ -486,7 +564,7 @@ const CrmApp: React.FC = () => {
                 callLogs={activeProjectLogs} 
                 onUpdate={(log) => setLogToUpdate({ log, type: 'details-share' })} 
               />
-              <DataImporter onFileImport={handleFileImport} isImporting={isImporting} />
+              <DataManagement onFileImport={handleFileImport} isImporting={isImporting} onShareData={handleShareData} />
             </div>
             <div className="lg:col-span-2">
               <CallList 
