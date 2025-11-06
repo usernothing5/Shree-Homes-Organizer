@@ -76,23 +76,22 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
       notes: notes.trim(),
     };
 
-    if (status === CallStatus.CallBackLater) {
-      if (!callbackDate || !callbackHour || !callbackMinute) {
-        alert('Please select a callback date and time.');
-        return;
-      }
-      
-      let hour24 = parseInt(callbackHour, 10);
-      if (callbackPeriod === 'PM' && hour24 < 12) {
-        hour24 += 12;
-      }
-      if (callbackPeriod === 'AM' && hour24 === 12) { // Midnight case
-        hour24 = 0;
-      }
+    // For Call Back Later, the fields are required by the form.
+    // For Details Share, it's optional. We only save if all fields are filled.
+    if (callbackDate && callbackHour && callbackMinute) {
+      if (status === CallStatus.CallBackLater || status === CallStatus.DetailsShare) {
+        let hour24 = parseInt(callbackHour, 10);
+        if (callbackPeriod === 'PM' && hour24 < 12) {
+          hour24 += 12;
+        }
+        if (callbackPeriod === 'AM' && hour24 === 12) { // Midnight case
+          hour24 = 0;
+        }
 
-      const [year, month, day] = callbackDate.split('-').map(Number);
-      const combinedDateTime = new Date(year, month - 1, day, hour24, Number(callbackMinute));
-      log.callbackTime = combinedDateTime.toISOString();
+        const [year, month, day] = callbackDate.split('-').map(Number);
+        const combinedDateTime = new Date(year, month - 1, day, hour24, Number(callbackMinute));
+        log.callbackTime = combinedDateTime.toISOString();
+      }
     }
 
     addCallLog(log);
@@ -137,7 +136,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
           />
         </div>
         <div>
-          <label htmlFor="status" className="block text-sm font-medium text-slate-600">Call Result</label>
+          <label htmlFor="status" className="block text-sm font-medium text-slate-600">FEEDBACK</label>
           <select
             id="status"
             value={status}
@@ -149,9 +148,11 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
             ))}
           </select>
         </div>
-        {status === CallStatus.CallBackLater && (
+        {(status === CallStatus.CallBackLater || status === CallStatus.DetailsShare) && (
           <div>
-            <label className="block text-sm font-medium text-slate-600">Callback Date & Time</label>
+            <label className="block text-sm font-medium text-slate-600">
+              {status === CallStatus.CallBackLater ? 'Callback Date & Time' : 'Schedule Follow-up (Optional)'}
+            </label>
             <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                <input
                 id="callbackDate"
@@ -159,7 +160,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
                 value={callbackDate}
                 onChange={(e) => setCallbackDate(e.target.value)}
                 className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
-                required
+                required={status === CallStatus.CallBackLater}
               />
               <div className="grid grid-cols-3 gap-2">
                 <select
@@ -167,8 +168,9 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
                   value={callbackHour}
                   onChange={(e) => setCallbackHour(e.target.value)}
                   className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
-                  required
+                  required={status === CallStatus.CallBackLater}
                 >
+                  <option value="" disabled>HH</option>
                   {hourOptions.map(hour => <option key={hour} value={hour}>{hour}</option>)}
                 </select>
                 <select
@@ -176,8 +178,9 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
                   value={callbackMinute}
                   onChange={(e) => setCallbackMinute(e.target.value)}
                   className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
-                  required
+                  required={status === CallStatus.CallBackLater}
                 >
+                  <option value="" disabled>MM</option>
                   {minuteOptions.map(minute => <option key={minute} value={minute}>{minute}</option>)}
                 </select>
                 <select
@@ -185,7 +188,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
                   value={callbackPeriod}
                   onChange={(e) => setCallbackPeriod(e.target.value as 'AM' | 'PM')}
                   className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
-                  required
+                  required={status === CallStatus.CallBackLater}
                 >
                   <option value="AM">AM</option>
                   <option value="PM">PM</option>

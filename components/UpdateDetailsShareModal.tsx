@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { CallLog, CallStatus } from '../types';
 
@@ -82,7 +83,7 @@ const UpdateDetailsShareModal: React.FC<UpdateDetailsShareModalProps> = ({ callL
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="status" className="block text-sm font-medium text-slate-600">New Call Result</label>
+              <label htmlFor="status" className="block text-sm font-medium text-slate-600">New FEEDBACK</label>
               <select id="status" value={newStatus} onChange={(e) => setNewStatus(e.target.value as CallStatus)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md">
                 {availableStatuses.map((s) => ( <option key={s} value={s}>{s}</option>))}
               </select>

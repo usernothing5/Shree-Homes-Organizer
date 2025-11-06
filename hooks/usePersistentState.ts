@@ -7,7 +7,7 @@ export function usePersistentState<T>(
     key: string,
     initialValue: T
 // FIX: Use imported Dispatch and SetStateAction types directly instead of React.Dispatch.
-): [T, Dispatch<SetStateAction<T>>, boolean, () => void] {
+): [T, Dispatch<SetStateAction<T>>, boolean, () => void, (newState: T) => void] {
     
     // The last state that was successfully saved to localStorage.
     const [lastSavedState, setLastSavedState] = useState<T>(() => {
@@ -40,7 +40,22 @@ export function usePersistentState<T>(
             }
         }
     }, [key, currentState]);
+
+    // New function to sync state from an external source (like URL)
+    const syncState = useCallback((newState: T) => {
+        if (typeof window !== "undefined") {
+            try {
+                const newStateString = JSON.stringify(newState);
+                window.localStorage.setItem(key, newStateString);
+                // Update both states to reflect the new source of truth
+                setCurrentState(newState);
+                setLastSavedState(newState); 
+            } catch (error) {
+                console.error(`Error syncing state to localStorage for key “${key}”:`, error);
+            }
+        }
+    }, [key]);
     
-    // Returns the current state, a setter for it, the dirty flag, and the save function.
-    return [currentState, setCurrentState, isDirty, saveState];
+    // Returns the current state, a setter for it, the dirty flag, the save function, and the new sync function.
+    return [currentState, setCurrentState, isDirty, saveState, syncState];
 }

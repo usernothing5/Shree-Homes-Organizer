@@ -26,3 +26,9 @@ export interface CallLog {
 export interface User {
   email: string;
 }
+
+export interface IncompleteLog {
+  originalRow: Record<string, any>;
+  parsedData: Partial<Omit<CallLog, 'id' | 'projectId'>>;
+  missingFields: Array<keyof Pick<CallLog, 'clientName' | 'status' | 'timestamp'>>;
+}

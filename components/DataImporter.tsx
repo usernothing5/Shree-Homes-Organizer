@@ -23,13 +23,12 @@ const DataImporter: React.FC<DataImporterProps> = ({ onFileImport, isImporting }
 
   const handleDownloadTemplate = () => {
     const headers = [
-      "Client Name", 
-      "Client Phone", 
-      "Status", 
-      "Timestamp", 
+      "Name", 
+      "Number", 
+      "FEEDBACK", 
+      "Date", 
       "Callback Time", 
-      "Notes",
-      "Number of Follow-ups"
+      "Remark"
     ];
     const exampleRow = [
       "John Doe",
@@ -37,8 +36,7 @@ const DataImporter: React.FC<DataImporterProps> = ({ onFileImport, isImporting }
       "Interested",
       "2024-07-30 15:45",
       "",
-      "Interested in 2BHK flat.",
-      "1"
+      "Interested in 2BHK flat."
     ];
      const exampleCallbackRow = [
       "Jane Smith",
@@ -46,8 +44,7 @@ const DataImporter: React.FC<DataImporterProps> = ({ onFileImport, isImporting }
       "Call Back Later",
       "2024-07-30 16:00",
       "2024-08-01 11:00",
-      "Asked to call back next week.",
-      "0"
+      "Asked to call back next week."
     ];
 
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -68,14 +65,12 @@ const DataImporter: React.FC<DataImporterProps> = ({ onFileImport, isImporting }
       <h2 className="text-xl font-bold mb-4 text-slate-700">Data Management</h2>
       <div className="space-y-4">
         <div>
-            <h3 className="font-semibold text-slate-600">Import Call Logs</h3>
-            <p className="text-sm text-slate-500 mt-1">
-                Upload an Excel (.xlsx, .xls) or CSV file to bulk add call logs.
+            <h3 className="font-semibold text-slate-600">Import Data</h3>
+             <p className="text-sm text-slate-500 mt-1">
+                Upload an Excel or CSV file. The importer will look for columns named "Name", "Date", "Number", "FEEDBACK", and "Remark".
             </p>
             <p className="text-xs text-slate-500 mt-2">
-                <strong>Required columns:</strong> `Client Name`, `Status`, `Timestamp`.
-                <br/>
-                <strong>Date format:</strong> `YYYY-MM-DD HH:mm`
+                The "FEEDBACK" column maps to the FEEDBACK field, and "Remark" maps to Notes. If required info is missing, you'll be prompted to fix it.
             </p>
         </div>
 

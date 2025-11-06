@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { CallLog, CallStatus } from '../types';
 
@@ -74,7 +76,21 @@ const ResolveCallbackModal: React.FC<ResolveCallbackModalProps> = ({ callLog, on
         <div className="flex justify-between items-start mb-4">
           <div>
             <h2 className="text-xl font-bold text-slate-700">Resolve Callback for {callLog.clientName}</h2>
-            {callLog.clientPhone && <p className="text-sm text-slate-500">{callLog.clientPhone}</p>}
+            {callLog.clientPhone && (
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-sm text-slate-500">{callLog.clientPhone}</p>
+                <a
+                  href={`tel:${callLog.clientPhone.replace(/\s+/g, '')}`}
+                  className="text-sky-600 hover:text-sky-800 p-1 rounded-full hover:bg-sky-100 transition-colors"
+                  aria-label={`Call ${callLog.clientName}`}
+                  title={`Call ${callLog.clientPhone}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                  </svg>
+                </a>
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -85,7 +101,7 @@ const ResolveCallbackModal: React.FC<ResolveCallbackModalProps> = ({ callLog, on
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <label htmlFor="status" className="block text-sm font-medium text-slate-600">New Call Result</label>
+              <label htmlFor="status" className="block text-sm font-medium text-slate-600">New FEEDBACK</label>
               <select
                 id="status"
                 value={newStatus}
