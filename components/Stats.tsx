@@ -37,8 +37,9 @@ const Stats: React.FC<StatsProps> = ({ callLogs }) => {
     const interestedClients = todaysLogs.filter(log => 
       log.status === CallStatus.Interested || log.status === CallStatus.DetailsShare
     ).length;
+    const notInterestedClients = todaysLogs.filter(log => log.status === CallStatus.NotInterested).length;
     
-    return { totalCalls, answeredCalls, interestedClients };
+    return { totalCalls, answeredCalls, interestedClients, notInterestedClients };
   }, [callLogs]);
 
   const hasHistory = useMemo(() => {
@@ -89,6 +90,12 @@ const Stats: React.FC<StatsProps> = ({ callLogs }) => {
               value={dailyStats.interestedClients}
               color="bg-emerald-500"
               icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+          />
+          <StatsCard 
+              title="Not Interested" 
+              value={dailyStats.notInterestedClients}
+              color="bg-red-500"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
           />
         </div>
       ) : (

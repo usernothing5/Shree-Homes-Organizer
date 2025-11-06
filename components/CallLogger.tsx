@@ -40,6 +40,7 @@ const getInitialIndianDateTime = () => {
 
 
 const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
+  const [callerName, setCallerName] = useState(() => localStorage.getItem('callerName') || '');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [status, setStatus] = useState<CallStatus>(CallStatus.Interested);
@@ -48,6 +49,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
   const [callbackMinute, setCallbackMinute] = useState('');
   const [callbackPeriod, setCallbackPeriod] = useState<'AM' | 'PM'>('AM');
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('callerName', callerName);
+  }, [callerName]);
 
   useEffect(() => {
     if (status === CallStatus.CallBackLater) {
@@ -64,12 +69,17 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!callerName.trim()) {
+      alert('Please enter the caller name.');
+      return;
+    }
     if (!clientName.trim()) {
       alert('Please enter a client name.');
       return;
     }
 
     const log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'> = {
+      callerName: callerName.trim(),
       clientName: clientName.trim(),
       clientPhone: clientPhone.trim(),
       status,
@@ -112,6 +122,18 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-bold mb-4 text-slate-700">Log New Call</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="callerName" className="block text-sm font-medium text-slate-600">Caller Name</label>
+          <input
+            id="callerName"
+            type="text"
+            value={callerName}
+            onChange={(e) => setCallerName(e.target.value)}
+            className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+            placeholder="Your Name"
+            required
+          />
+        </div>
         <div>
           <label htmlFor="clientName" className="block text-sm font-medium text-slate-600">Client Name</label>
           <input

@@ -14,6 +14,7 @@ export interface Project {
 export interface CallLog {
   id:string;
   projectId: string;
+  callerName: string;
   clientName: string;
   clientPhone?: string;
   status: CallStatus;
@@ -30,5 +31,12 @@ export interface User {
 export interface IncompleteLog {
   originalRow: Record<string, any>;
   parsedData: Partial<Omit<CallLog, 'id' | 'projectId'>>;
-  missingFields: Array<keyof Pick<CallLog, 'clientName' | 'status' | 'timestamp'>>;
+  missingFields: Array<keyof Pick<CallLog, 'callerName' | 'clientName' | 'status' | 'timestamp'>>;
+}
+
+export interface CallerStats {
+  totalCalls: number;
+  answeredCalls: number;
+  interestedClients: number;
+  notInterestedClients: number;
 }

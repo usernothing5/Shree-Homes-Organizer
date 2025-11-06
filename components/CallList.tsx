@@ -58,6 +58,9 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
           <div>{log.clientName}</div>
           {log.clientPhone && <div className="text-xs text-slate-500">{log.clientPhone}</div>}
         </td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+          {log.callerName}
+        </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm">
           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(log.status)}`}>
             {log.status}
@@ -121,7 +124,7 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
       </tr>
       {isExpanded && hasNotes && (
         <tr className="bg-slate-50">
-          <td colSpan={5} className="px-6 py-4 text-sm text-slate-600 border-t border-slate-200">
+          <td colSpan={6} className="px-6 py-4 text-sm text-slate-600 border-t border-slate-200">
             <h4 className="font-semibold mb-1 text-slate-800">Notes:</h4>
             <p className="whitespace-pre-wrap pl-2 border-l-2 border-slate-300">{log.notes}</p>
           </td>
@@ -214,6 +217,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
               <thead className="bg-slate-50">
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Caller</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                   <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Follow-ups</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
@@ -243,6 +247,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
               <thead className="bg-slate-50">
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Caller</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                   <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Follow-ups</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
@@ -253,7 +258,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                 {historicalLogsByDate.map(([date, logs]) => (
                   <React.Fragment key={date}>
                     <tr className="bg-slate-100">
-                      <td colSpan={5} className="px-6 py-2 text-sm font-bold text-slate-600">
+                      <td colSpan={6} className="px-6 py-2 text-sm font-bold text-slate-600">
                         {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
                       </td>
                     </tr>

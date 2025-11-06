@@ -7,7 +7,7 @@ interface SummaryHistoryProps {
 
 const SummaryHistory: React.FC<SummaryHistoryProps> = ({ callLogs }) => {
   const historicalStats = useMemo(() => {
-    const statsByDate: { [key: string]: { totalCalls: number; answeredCalls: number; interestedClients: number } } = {};
+    const statsByDate: { [key: string]: { totalCalls: number; answeredCalls: number; interestedClients: number; notInterestedClients: number; } } = {};
     const today = new Date();
     const todayString = today.toISOString().split('T')[0];
 
@@ -20,7 +20,7 @@ const SummaryHistory: React.FC<SummaryHistoryProps> = ({ callLogs }) => {
       }
 
       if (!statsByDate[dateString]) {
-        statsByDate[dateString] = { totalCalls: 0, answeredCalls: 0, interestedClients: 0 };
+        statsByDate[dateString] = { totalCalls: 0, answeredCalls: 0, interestedClients: 0, notInterestedClients: 0 };
       }
 
       statsByDate[dateString].totalCalls++;
@@ -29,6 +29,9 @@ const SummaryHistory: React.FC<SummaryHistoryProps> = ({ callLogs }) => {
       }
       if (log.status === CallStatus.Interested || log.status === CallStatus.DetailsShare) {
         statsByDate[dateString].interestedClients++;
+      }
+      if (log.status === CallStatus.NotInterested) {
+        statsByDate[dateString].notInterestedClients++;
       }
     });
 
@@ -55,19 +58,11 @@ const SummaryHistory: React.FC<SummaryHistoryProps> = ({ callLogs }) => {
           <p className="font-bold text-slate-700 mb-2">
             {new Date(stat.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
           </p>
-          <div className="grid grid-cols-3 gap-2 text-center text-sm">
-            <div>
-              <p className="font-semibold text-slate-800">{stat.totalCalls}</p>
-              <p className="text-slate-500">Total</p>
-            </div>
-            <div>
-              <p className="font-semibold text-slate-800">{stat.answeredCalls}</p>
-              <p className="text-slate-500">Answered</p>
-            </div>
-            <div>
-              <p className="font-semibold text-slate-800">{stat.interestedClients}</p>
-              <p className="text-slate-500">Interested</p>
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            <p><span className="font-semibold text-slate-600">Total:</span> {stat.totalCalls}</p>
+            <p><span className="font-semibold text-slate-600">Answered:</span> {stat.answeredCalls}</p>
+            <p><span className="font-semibold text-slate-600">Interested:</span> {stat.interestedClients}</p>
+            <p><span className="font-semibold text-slate-600">Not Int:</span> {stat.notInterestedClients}</p>
           </div>
         </div>
       ))}

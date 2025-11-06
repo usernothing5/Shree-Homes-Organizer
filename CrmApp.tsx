@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { usePersistentState } from './hooks/usePersistentState';
-import { CallLog, CallStatus, Project, IncompleteLog } from './types';
+import { CallLog, CallStatus, Project, IncompleteLog, CallerStats } from './types';
 import Header from './components/Header';
 import CallLogger from './components/CallLogger';
 import Stats from './components/Stats';
@@ -16,6 +16,7 @@ import DataManagement from './components/DataManagement';
 import ImportStatusModal, { ImportResults } from './components/ImportStatusModal';
 import ImportReviewModal from './components/ImportReviewModal';
 import ShareModal from './components/ShareModal';
+import CallerPerformance, { DailyCallerOverrides } from './components/CallerPerformance';
 
 
 type LogUpdatePayload = {
@@ -62,11 +63,17 @@ async function decodeAndDecompress(base64String: string): Promise<string> {
   return await new Response(decompressedStream).text();
 }
 
+type StatOverrides = {
+  [projectId: string]: {
+    [date: string]: DailyCallerOverrides;
+  };
+};
 
 const CrmApp: React.FC = () => {
   const [projects, setProjects, isProjectsDirty, saveProjects, syncProjects] = usePersistentState<Project[]>('projects', []);
   const [activeProjectId, setActiveProjectId, isActiveProjectIdDirty, saveActiveProjectId, syncActiveProjectId] = usePersistentState<string | null>('activeProjectId', null);
   const [callLogs, setCallLogs, areCallLogsDirty, saveCallLogs, syncCallLogs] = usePersistentState<CallLog[]>('callLogs', []);
+  const [statOverrides, setStatOverrides, areOverridesDirty, saveOverrides, syncOverrides] = usePersistentState<StatOverrides>('statOverrides', {});
   
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
@@ -96,12 +103,13 @@ const CrmApp: React.FC = () => {
                   decodedData = atob(encodedData);
               }
               
-              const { projects: loadedProjects, callLogs: loadedCallLogs, activeProjectId: loadedActiveProjectId } = JSON.parse(decodedData);
+              const { projects: loadedProjects, callLogs: loadedCallLogs, activeProjectId: loadedActiveProjectId, statOverrides: loadedOverrides } = JSON.parse(decodedData);
 
               if (Array.isArray(loadedProjects) && Array.isArray(loadedCallLogs)) {
                   syncProjects(loadedProjects);
                   syncCallLogs(loadedCallLogs);
                   syncActiveProjectId(loadedActiveProjectId ?? loadedProjects[0]?.id ?? null);
+                  syncOverrides(loadedOverrides ?? {});
               }
               // Clear hash after loading
               window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -113,18 +121,19 @@ const CrmApp: React.FC = () => {
         };
         loadData();
     }
-  }, [syncProjects, syncCallLogs, syncActiveProjectId]);
+  }, [syncProjects, syncCallLogs, syncActiveProjectId, syncOverrides]);
 
 
   // Combine dirty flags into a single app-wide status
-  const isAppDirty = isProjectsDirty || isActiveProjectIdDirty || areCallLogsDirty;
+  const isAppDirty = isProjectsDirty || isActiveProjectIdDirty || areCallLogsDirty || areOverridesDirty;
 
   // Function to save all changes across the app
   const saveAllChanges = useCallback(() => {
     saveProjects();
     saveActiveProjectId();
     saveCallLogs();
-  }, [saveProjects, saveActiveProjectId, saveCallLogs]);
+    saveOverrides();
+  }, [saveProjects, saveActiveProjectId, saveCallLogs, saveOverrides]);
 
   // Warn user about unsaved changes before leaving the page
   useEffect(() => {
@@ -159,6 +168,23 @@ const CrmApp: React.FC = () => {
     if (!activeProjectId) return [];
     return callLogs.filter(log => log.projectId === activeProjectId);
   }, [callLogs, activeProjectId]);
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  const todaysLogs = useMemo(() => {
+    return activeProjectLogs.filter(log => isToday(new Date(log.timestamp)));
+  }, [activeProjectLogs]);
+  
+  const todaysOverrides = useMemo(() => {
+    if (!activeProjectId) return undefined;
+    const todayString = new Date().toISOString().split('T')[0];
+    return statOverrides[activeProjectId]?.[todayString];
+  }, [statOverrides, activeProjectId]);
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -214,7 +240,7 @@ const CrmApp: React.FC = () => {
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       projectId: activeProjectId,
-      followUpCount: 1,
+      followUpCount: 0,
     };
     setCallLogs(prevLogs => [newLog, ...prevLogs]);
   }, [setCallLogs, activeProjectId]);
@@ -296,13 +322,40 @@ const CrmApp: React.FC = () => {
       )
     );
   };
+  
+  const handleUpdateOverride = useCallback((callerName: string, newStats: Partial<CallerStats>) => {
+    if (!activeProjectId) return;
+    const todayString = new Date().toISOString().split('T')[0];
+    setStatOverrides(prev => {
+        const newOverrides = JSON.parse(JSON.stringify(prev)); // Deep copy
+        if (!newOverrides[activeProjectId]) newOverrides[activeProjectId] = {};
+        if (!newOverrides[activeProjectId][todayString]) newOverrides[activeProjectId][todayString] = {};
+
+        if (Object.keys(newStats).length > 0) {
+              newOverrides[activeProjectId][todayString][callerName] = newStats;
+        } else {
+              // If the newStats object is empty, it means all overrides were removed
+              delete newOverrides[activeProjectId][todayString][callerName];
+              // Clean up empty objects
+              if (Object.keys(newOverrides[activeProjectId][todayString]).length === 0) {
+                  delete newOverrides[activeProjectId][todayString];
+              }
+              if (Object.keys(newOverrides[activeProjectId]).length === 0) {
+                  delete newOverrides[activeProjectId];
+              }
+        }
+        return newOverrides;
+    });
+  }, [activeProjectId, setStatOverrides]);
+
 
   const handleShareData = async () => {
     saveAllChanges(); // Ensure we're sharing the latest saved state
     const dataToShare = {
         projects,
         callLogs,
-        activeProjectId
+        activeProjectId,
+        statOverrides,
     };
     try {
         const jsonString = JSON.stringify(dataToShare);
@@ -370,8 +423,11 @@ const CrmApp: React.FC = () => {
         if (!row || Object.values(row).every(v => v === null || v === '')) return; // Skip empty/null rows
 
         const parsedData: Partial<Omit<CallLog, 'id' | 'projectId'>> = {};
-        const missingFields: Array<keyof Pick<CallLog, 'clientName' | 'status' | 'timestamp'>> = [];
+        const missingFields: Array<keyof Pick<CallLog, 'clientName' | 'status' | 'timestamp' | 'callerName'>> = [];
         const usedKeys = new Set<string>();
+        
+        const [caller, callerKey] = getColumnValue(row, ['caller', 'callername']);
+        if(callerKey) usedKeys.add(callerKey);
         
         const [name, nameKey] = getColumnValue(row, ['name', 'clientname']);
         if(nameKey) usedKeys.add(nameKey);
@@ -390,6 +446,9 @@ const CrmApp: React.FC = () => {
         
         const [callback, callbackKey] = getColumnValue(row, ['callbacktime', 'callback']);
         if(callbackKey) usedKeys.add(callbackKey);
+        
+        if (caller) parsedData.callerName = String(caller);
+        else missingFields.push('callerName');
 
         if (name) parsedData.clientName = String(name);
         else missingFields.push('clientName');
@@ -424,7 +483,7 @@ const CrmApp: React.FC = () => {
           .join('\n');
         
         parsedData.notes = [remark || '', otherNotes].filter(Boolean).join('\n\n');
-        parsedData.followUpCount = 1;
+        parsedData.followUpCount = 0;
 
         if (Object.keys(row).length > 0) {
             logsForReview.push({ originalRow: row, parsedData, missingFields });
@@ -465,7 +524,7 @@ const CrmApp: React.FC = () => {
       id: crypto.randomUUID(),
       projectId: activeProjectId,
       timestamp: log.timestamp || new Date().toISOString(),
-      followUpCount: log.followUpCount ?? 1,
+      followUpCount: log.followUpCount ?? 0,
     }));
   
     setCallLogs(prev => [...newLogs, ...prev]);
@@ -559,6 +618,11 @@ const CrmApp: React.FC = () => {
             <div className="lg:col-span-1 space-y-6">
               <CallLogger addCallLog={addCallLog} />
               <Stats callLogs={activeProjectLogs} />
+              <CallerPerformance 
+                todaysLogs={todaysLogs}
+                overrides={todaysOverrides}
+                onUpdateOverride={handleUpdateOverride}
+              />
               <ScheduledCallbacks callLogs={activeProjectLogs} />
               <PendingFollowUps 
                 callLogs={activeProjectLogs} 
