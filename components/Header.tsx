@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Project } from '../types';
+import { Project, User } from '../types';
 
 interface HeaderProps {
   projects: Project[];
@@ -8,16 +8,23 @@ interface HeaderProps {
   onManageProjects: () => void;
   isDirty: boolean;
   onSave: () => void;
+  user: User;
+  onSignOut: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects, isDirty, onSave }) => {
+const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects, isDirty, onSave, user, onSignOut }) => {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (projectDropdownRef.current && !projectDropdownRef.current.contains(event.target as Node)) {
         setIsProjectDropdownOpen(false);
+      }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setIsUserDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -88,6 +95,42 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
                     role="menuitem"
                   >
                     Manage Projects...
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="border-l border-slate-600 h-8"></div>
+
+          <div className="relative" ref={userDropdownRef}>
+            <button 
+              onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)} 
+              className="flex items-center gap-2 text-white font-medium py-2 px-1 rounded-md transition-colors"
+              aria-label="User menu"
+            >
+              <span className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center font-bold text-white">
+                {user.email.charAt(0).toUpperCase()}
+              </span>
+            </button>
+            {isUserDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                <div className="py-1" role="menu" aria-orientation="vertical">
+                  <div className="px-4 py-3 text-sm text-slate-700 border-b border-slate-200">
+                    <p className="font-semibold">Signed in as</p>
+                    <p className="truncate" title={user.email}>{user.email}</p>
+                  </div>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onSignOut();
+                      setIsUserDropdownOpen(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                    role="menuitem"
+                  >
+                    Sign out
                   </a>
                 </div>
               </div>
