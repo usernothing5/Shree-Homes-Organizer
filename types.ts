@@ -24,6 +24,10 @@ export interface CallLog {
   followUpCount?: number;
 }
 
+export interface User {
+  email: string;
+}
+
 export interface IncompleteLog {
   originalRow: Record<string, any>;
   parsedData: Partial<Omit<CallLog, 'id' | 'projectId'>>;
