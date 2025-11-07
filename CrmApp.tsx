@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { usePersistentState } from './hooks/usePersistentState';
-import { CallLog, CallStatus, Project, IncompleteLog, CallerStats, User } from './types';
+import { CallLog, CallStatus, Project, IncompleteLog, CallerStats } from './types';
 import Header from './components/Header';
 import CallLogger from './components/CallLogger';
 import Stats from './components/Stats';
@@ -69,17 +69,11 @@ type StatOverrides = {
   };
 };
 
-interface CrmAppProps {
-  user: User;
-  onSignOut: () => void;
-}
-
-const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
-  const userPrefix = user.email;
-  const [projects, setProjects, isProjectsDirty, saveProjects, syncProjects] = usePersistentState<Project[]>(`projects_${userPrefix}`, []);
-  const [activeProjectId, setActiveProjectId, isActiveProjectIdDirty, saveActiveProjectId, syncActiveProjectId] = usePersistentState<string | null>(`activeProjectId_${userPrefix}`, null);
-  const [callLogs, setCallLogs, areCallLogsDirty, saveCallLogs, syncCallLogs] = usePersistentState<CallLog[]>(`callLogs_${userPrefix}`, []);
-  const [statOverrides, setStatOverrides, areOverridesDirty, saveOverrides, syncOverrides] = usePersistentState<StatOverrides>(`statOverrides_${userPrefix}`, {});
+const CrmApp: React.FC = () => {
+  const [projects, setProjects, isProjectsDirty, saveProjects, syncProjects] = usePersistentState<Project[]>('projects', []);
+  const [activeProjectId, setActiveProjectId, isActiveProjectIdDirty, saveActiveProjectId, syncActiveProjectId] = usePersistentState<string | null>('activeProjectId', null);
+  const [callLogs, setCallLogs, areCallLogsDirty, saveCallLogs, syncCallLogs] = usePersistentState<CallLog[]>('callLogs', []);
+  const [statOverrides, setStatOverrides, areOverridesDirty, saveOverrides, syncOverrides] = usePersistentState<StatOverrides>('statOverrides', {});
   
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
@@ -119,7 +113,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
               }
               // Clear hash after loading
               window.history.replaceState(null, "", window.location.pathname + window.location.search);
-              alert("Data loaded successfully from the link! It has been saved to your account.");
+              alert("Data loaded successfully from the link! It has been saved to your device.");
           } catch (e) {
               console.error("Failed to parse data from URL hash", e);
               alert("Could not load data from the link. It may be corrupted, invalid, or created with an incompatible version.");
@@ -619,8 +613,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           onManageProjects={() => setIsManageProjectsModalOpen(true)}
           isDirty={isAppDirty}
           onSave={saveAllChanges}
-          user={user}
-          onSignOut={onSignOut}
         />
         <main className="p-4 sm:p-6 lg:p-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
