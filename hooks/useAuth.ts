@@ -4,7 +4,6 @@ import { User } from '../types';
 // In a real app, this would involve a library like Firebase Auth or an OAuth flow.
 // For this example, we'll simulate it using localStorage.
 
-const FAKE_USER: User = { email: 'user@example.com' };
 const AUTH_KEY = 'crm-auth-user';
 
 export const useAuth = () => {
@@ -24,10 +23,11 @@ export const useAuth = () => {
     }
   }, []);
 
-  const signIn = useCallback(() => {
+  const signIn = useCallback((email: string) => {
+    if (!email) return;
     try {
-      // Simulate a successful Google sign-in
-      const loggedInUser = FAKE_USER;
+      // Create user based on provided email
+      const loggedInUser: User = { email };
       window.localStorage.setItem(AUTH_KEY, JSON.stringify(loggedInUser));
       setUser(loggedInUser);
     } catch (error) {
