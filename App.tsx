@@ -2,10 +2,9 @@ import React from 'react';
 import CrmApp from './CrmApp';
 import AuthPage from './components/AuthPage';
 import { useAuth } from './hooks/useAuth';
-import { User } from './types';
 
 const App: React.FC = () => {
-  const { user, loading, signIn, signOut } = useAuth();
+  const { user, loading, signUp, signIn, signOut } = useAuth();
 
   if (loading) {
     return (
@@ -21,7 +20,7 @@ const App: React.FC = () => {
   }
   
   if (!user) {
-    return <AuthPage onSignIn={signIn} />;
+    return <AuthPage onSignIn={signIn} onSignUp={signUp} />;
   }
 
   return <CrmApp user={user} onSignOut={signOut} />;

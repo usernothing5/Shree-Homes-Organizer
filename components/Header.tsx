@@ -6,13 +6,11 @@ interface HeaderProps {
   activeProject: Project | undefined;
   onSwitchProject: (id: string) => void;
   onManageProjects: () => void;
-  isDirty: boolean;
-  onSave: () => void;
   user: User;
   onSignOut: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects, isDirty, onSave, user, onSignOut }) => {
+const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects, user, onSignOut }) => {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -42,19 +40,6 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
         </div>
 
         <div className="flex items-center gap-4">
-          <button
-            onClick={onSave}
-            disabled={!isDirty}
-            aria-live="polite"
-            className={`font-medium py-2 px-4 rounded-md transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-white ${
-              isDirty
-                ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md animate-pulse-slow'
-                : 'bg-slate-700 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            {isDirty ? 'Save Changes' : 'Saved'}
-          </button>
-
           <div className="relative" ref={projectDropdownRef}>
             <button 
               onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
@@ -110,7 +95,7 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
               aria-label="User menu"
             >
               <span className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center font-bold text-white">
-                {user.email.charAt(0).toUpperCase()}
+                {user.email ? user.email.charAt(0).toUpperCase() : '?'}
               </span>
             </button>
             {isUserDropdownOpen && (
@@ -118,7 +103,7 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
                 <div className="py-1" role="menu" aria-orientation="vertical">
                   <div className="px-4 py-3 text-sm text-slate-700 border-b border-slate-200">
                     <p className="font-semibold">Signed in as</p>
-                    <p className="truncate" title={user.email}>{user.email}</p>
+                    <p className="truncate" title={user.email || 'No Email'}>{user.email}</p>
                   </div>
                   <a
                     href="#"

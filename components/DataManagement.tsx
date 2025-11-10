@@ -1,12 +1,12 @@
+
 import React, { useRef } from 'react';
 
 interface DataManagementProps {
   onFileImport: (file: File) => void;
   isImporting: boolean;
-  onShareData: () => void;
 }
 
-const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, isImporting, onShareData }) => {
+const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, isImporting }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,27 +112,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, isImporti
                         Import from Excel/CSV
                     </>
                 )}
-            </button>
-        </div>
-        
-        <div className="border-t border-slate-200"></div>
-
-        {/* Share Section */}
-        <div className="space-y-4">
-             <div>
-                <h3 className="font-semibold text-slate-600">Share Data</h3>
-                 <p className="text-sm text-slate-500 mt-1">
-                    Generate a unique link containing all your current data. Open this link on another device to load your workspace instantly.
-                </p>
-            </div>
-             <button
-                onClick={onShareData}
-                className="w-full flex justify-center items-center gap-2 py-2 px-4 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors"
-            >
-                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
-                 </svg>
-                Share Data via Link
             </button>
         </div>
       </div>

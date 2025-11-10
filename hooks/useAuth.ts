@@ -1,48 +1,62 @@
 import { useState, useCallback, useEffect } from 'react';
+import { 
+  onAuthStateChanged, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut as firebaseSignOut,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import { auth } from '../firebase';
 import { User } from '../types';
-
-// In a real app, this would involve a library like Firebase Auth or an OAuth flow.
-// For this example, we'll simulate it using localStorage.
-
-const AUTH_KEY = 'crm-auth-user';
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const storedUser = window.localStorage.getItem(AUTH_KEY);
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+      if (firebaseUser) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+        });
+      } else {
+        setUser(null);
       }
-    } catch (error) {
-      console.error("Failed to read user from localStorage", error);
-    } finally {
-        setLoading(false);
-    }
+      setLoading(false);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
-  const signIn = useCallback((email: string) => {
-    if (!email) return;
+  const signUp = useCallback(async (email, password) => {
     try {
-      // Create user based on provided email
-      const loggedInUser: User = { email };
-      window.localStorage.setItem(AUTH_KEY, JSON.stringify(loggedInUser));
-      setUser(loggedInUser);
+      await createUserWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      console.error("Failed to save user to localStorage", error);
+      console.error("Sign up error", error);
+      // Re-throw the error to be caught in the component
+      throw error;
     }
   }, []);
 
-  const signOut = useCallback(() => {
+  const signIn = useCallback(async (email, password) => {
     try {
-      window.localStorage.removeItem(AUTH_KEY);
-      setUser(null);
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      console.error("Failed to remove user from localStorage", error);
+      console.error("Sign in error", error);
+      throw error;
     }
   }, []);
 
-  return { user, loading, signIn, signOut };
+  const signOut = useCallback(async () => {
+    try {
+      await firebaseSignOut(auth);
+    } catch (error) {
+      console.error("Sign out error", error);
+      throw error;
+    }
+  }, []);
+
+  return { user, loading, signUp, signIn, signOut };
 };
