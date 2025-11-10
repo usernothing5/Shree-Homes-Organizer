@@ -11,7 +11,8 @@ import {
   writeBatch,
   where,
   getDocs,
-  Timestamp
+  Timestamp,
+  setDoc,
 } from 'firebase/firestore';
 import { CallLog, CallStatus, Project, IncompleteLog, CallerStats, User } from './types';
 import Header from './components/Header';
@@ -29,6 +30,7 @@ import DataManagement from './components/DataManagement';
 import ImportStatusModal, { ImportResults } from './components/ImportStatusModal';
 import ImportReviewModal from './components/ImportReviewModal';
 import CallerPerformance, { DailyCallerOverrides } from './components/CallerPerformance';
+import FirestoreRulesMessage from './components/FirestoreRulesMessage';
 
 type LogUpdatePayload = {
   status?: CallStatus;
@@ -55,6 +57,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [statOverrides, setStatOverrides] = useState<StatOverrides>({});
 
   const [isLoading, setIsLoading] = useState(true);
+  const [rulesError, setRulesError] = useState(false);
 
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
@@ -66,8 +69,35 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
   const [logsForReview, setLogsForReview] = useState<IncompleteLog[] | null>(null);
 
+  // --- Firestore Security Rules Check ---
+  useEffect(() => {
+    if (!user?.uid || !db) return;
+
+    const checkFirestoreRules = async () => {
+      try {
+        const testDocRef = doc(db, `users/${user.uid}/_config/rules_check`);
+        await setDoc(testDocRef, { check: true });
+        await deleteDoc(testDocRef);
+        if (rulesError) {
+          setRulesError(false);
+        }
+      } catch (error: any) {
+        if (error.code === 'permission-denied') {
+          console.error("Firestore Security Rules Error: Data access was denied. Please update your Firestore security rules.", error.message);
+          setRulesError(true);
+        } else {
+          console.error("An unexpected error occurred during rules check:", error);
+        }
+      }
+    };
+
+    checkFirestoreRules();
+  }, [user.uid, rulesError]);
+
+
   // --- Firestore Data Fetching ---
   useEffect(() => {
+    if (rulesError) return;
     setIsLoading(true);
     const projectsCol = collection(db, `users/${user.uid}/projects`);
     const projectsQuery = query(projectsCol);
@@ -88,13 +118,16 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         });
       }
       setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching projects:", error);
+        setIsLoading(false);
     });
 
     return () => unsubscribeProjects();
-  }, [user.uid]); // Only re-run when user changes
+  }, [user.uid, rulesError]); // Re-run when user changes or rules are fixed
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || rulesError) return;
     
     const logsCol = collection(db, `users/${user.uid}/callLogs`);
     const logsQuery = query(logsCol, where("projectId", "==", activeProjectId));
@@ -127,7 +160,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         unsubscribeLogs();
         unsubscribeOverrides();
     }
-  }, [user.uid, activeProjectId]);
+  }, [user.uid, activeProjectId, rulesError]);
 
   const activeProject = useMemo(() => projects.find(p => p.id === activeProjectId), [projects, activeProjectId]);
 
@@ -200,15 +233,18 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const handleUpdateLog = useCallback(async (logId: string, updates: LogUpdatePayload) => {
     const logRef = doc(db, `users/${user.uid}/callLogs`, logId);
     
-    const finalUpdates: any = {
-      ...updates,
-      timestamp: Timestamp.now(),
-    };
+    const finalUpdates: any = { ...updates };
 
-    if (updates.status && updates.status !== CallStatus.CallBackLater) {
+    // CRITICAL FIX: Do NOT update the original timestamp on every edit.
+    delete finalUpdates.timestamp;
+
+    // Handle callbackTime conversion and clearing
+    if ('callbackTime' in finalUpdates) {
+      finalUpdates.callbackTime = finalUpdates.callbackTime ? Timestamp.fromDate(new Date(finalUpdates.callbackTime)) : null;
+    }
+    
+    if (finalUpdates.status && finalUpdates.status !== CallStatus.CallBackLater) {
         finalUpdates.callbackTime = null; // Clear callback time if status changes
-    } else if (updates.callbackTime) {
-        finalUpdates.callbackTime = Timestamp.fromDate(new Date(updates.callbackTime));
     }
 
     await updateDoc(logRef, finalUpdates);
@@ -263,9 +299,9 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     }
   };
   
-  // Omitted File Import and other functions for brevity - they remain largely the same,
-  // except for how they add data, which now uses Firestore functions.
-  // The provided code below includes the full, updated logic.
+  if (rulesError) {
+    return <FirestoreRulesMessage />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
