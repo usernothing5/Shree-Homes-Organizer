@@ -209,6 +209,178 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     return () => timers.forEach(clearTimeout);
   }, [callLogs, activeCallback, activeProject]);
 
+    // --- Data Import Functions ---
+  const handleFileImport = (file: File) => {
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        // @ts-ignore
+        const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        // @ts-ignore
+        const json: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+        processImportedData(json);
+      } catch (error) {
+        console.error("Error processing file:", error);
+        alert("There was an error reading the file. Please ensure it's a valid Excel or CSV file.");
+        setIsImporting(false);
+      }
+    };
+    reader.onerror = () => {
+        alert("Could not read the file.");
+        setIsImporting(false);
+    };
+    reader.readAsBinaryString(file);
+  };
+  
+  const processImportedData = (data: Record<string, any>[]) => {
+    const logsToReview: IncompleteLog[] = [];
+    const logsToImport: Omit<CallLog, 'id' | 'projectId'>[] = [];
+    const savedCallerName = localStorage.getItem('callerName') || 'Unknown Caller';
+
+    data.forEach(row => {
+        const findKey = (keys: string[]) => {
+            const rowKeys = Object.keys(row);
+            for (const key of keys) {
+                const found = rowKeys.find(rk => rk.toLowerCase().trim() === key.toLowerCase().trim());
+                if (found) return row[found];
+            }
+            return undefined;
+        };
+
+        const statusString = findKey(['feedback', 'status']);
+        const status = Object.values(CallStatus).find(s => s.toLowerCase() === statusString?.toLowerCase());
+
+        let timestamp: string | undefined;
+        const dateValue = findKey(['date', 'timestamp']);
+        if (dateValue) {
+            const parsedDate = new Date(dateValue);
+            if (!isNaN(parsedDate.getTime())) {
+                timestamp = parsedDate.toISOString();
+            }
+        }
+        
+        let callbackTime: string | undefined;
+        const callbackValue = findKey(['callback time', 'callback']);
+        if (callbackValue) {
+             const parsedDate = new Date(callbackValue);
+            if (!isNaN(parsedDate.getTime())) {
+                callbackTime = parsedDate.toISOString();
+            }
+        }
+
+        const parsedData: Partial<Omit<CallLog, 'id' | 'projectId'>> = {
+            callerName: findKey(['caller', 'caller name']) || savedCallerName,
+            clientName: findKey(['name', 'client name']),
+            clientPhone: String(findKey(['number', 'phone', 'phone number']) || ''),
+            status: status,
+            notes: findKey(['remark', 'notes']),
+            timestamp: timestamp,
+            callbackTime: callbackTime,
+            followUpCount: 0,
+        };
+
+        const missingFields: Array<keyof Pick<CallLog, 'clientName' | 'status' | 'timestamp'>> = [];
+        if (!parsedData.clientName) missingFields.push('clientName');
+        if (!parsedData.status) missingFields.push('status');
+        if (!parsedData.timestamp) missingFields.push('timestamp');
+
+        if (missingFields.length > 0) {
+            logsToReview.push({ originalRow: row, parsedData, missingFields });
+        } else {
+            logsToImport.push(parsedData as Omit<CallLog, 'id' | 'projectId'>);
+        }
+    });
+
+    if (logsToReview.length > 0) {
+      setLogsForReview(logsToReview);
+    }
+    
+    if (logsToImport.length > 0) {
+      batchImportLogs(logsToImport, logsToReview.length > 0 ? undefined : []);
+    } else if (logsToReview.length === 0) {
+        setImportResults({ successCount: 0, errorCount: data.length, errors: ["No valid data found to import."] });
+        setIsImporting(false);
+    }
+  };
+
+  const handleCompleteReview = (reviewedLogs: Array<Omit<CallLog, 'id' | 'projectId'>>) => {
+    const originalReviewCount = logsForReview?.length || 0;
+    const errors: string[] = [];
+    
+    // Any logs that were skipped are not in reviewedLogs.
+    const skippedCount = originalReviewCount - reviewedLogs.length;
+    if (skippedCount > 0) {
+        errors.push(`${skippedCount} row(s) were skipped by the user during review.`);
+    }
+
+    const previouslyImportedCount = importResults?.successCount || 0;
+    
+    setLogsForReview(null);
+
+    // This runs a batch import for the logs that passed the review step.
+    // It's called with the errors array from the skipped logs.
+    batchImportLogs(reviewedLogs, errors, previouslyImportedCount);
+  };
+  
+  const batchImportLogs = async (logs: Array<Omit<CallLog, 'id' | 'projectId'>>, initialErrors: string[] = [], previouslyImportedCount: number = 0) => {
+    if (!activeProjectId) {
+      alert("No active project selected. Cannot import data.");
+      setIsImporting(false);
+      return;
+    }
+
+    if (logs.length === 0 && !logsForReview) {
+        setImportResults({ successCount: previouslyImportedCount, errorCount: initialErrors.length, errors: initialErrors });
+        setIsImporting(false);
+        return;
+    }
+
+    const batch = writeBatch(db);
+    const logsCollection = collection(db, `users/${user.uid}/callLogs`);
+    
+    logs.forEach(log => {
+      const docRef = doc(logsCollection);
+      const logWithProject = { 
+        ...log,
+        projectId: activeProjectId,
+        timestamp: Timestamp.fromDate(new Date(log.timestamp)),
+        ...(log.callbackTime && { callbackTime: Timestamp.fromDate(new Date(log.callbackTime)) })
+      };
+      batch.set(docRef, logWithProject);
+    });
+
+    try {
+      await batch.commit();
+      // If we are not in a review flow, set the results now.
+      if(!logsForReview) {
+          setImportResults({ 
+            successCount: previouslyImportedCount + logs.length, 
+            errorCount: initialErrors.length, 
+            errors: initialErrors 
+          });
+      }
+    } catch (error) {
+      console.error("Batch import failed:", error);
+      if(!logsForReview) {
+          setImportResults({
+              successCount: previouslyImportedCount,
+              errorCount: initialErrors.length + logs.length,
+              errors: [...initialErrors, `Firestore error: Could not save ${logs.length} records. See console for details.`]
+          });
+      }
+    } finally {
+        // Only stop importing and show final results if the review modal is not open
+        if (!logsForReview) {
+            setIsImporting(false);
+        }
+    }
+  };
+
+
   // --- Data Modification Functions ---
   const addCallLog = useCallback(async (log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'>) => {
     if (!activeProjectId) return;
@@ -305,7 +477,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
-      {isManageProjectsModalOpen && (
+       {isManageProjectsModalOpen && (
         <ManageProjectsModal
           projects={projects}
           onAddProject={handleAddProject}
@@ -313,7 +485,19 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           onClose={() => setIsManageProjectsModalOpen(false)}
         />
       )}
-       {/* Other modals (ImportReview, ImportStatus, Resolve, Update, Edit) remain here */}
+       {logsForReview && (
+        <ImportReviewModal
+          logsToReview={logsForReview}
+          onComplete={handleCompleteReview}
+          onCancel={() => { setLogsForReview(null); setIsImporting(false); }}
+        />
+      )}
+      {importResults && (
+        <ImportStatusModal
+          results={importResults}
+          onClose={() => setImportResults(null)}
+        />
+      )}
       
       {activeCallback && !isResolveModalOpen && (
         <NotificationBanner
@@ -371,7 +555,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
                   callLogs={callLogs} 
                   onUpdate={(log) => setLogToUpdate({ log, type: 'details-share' })} 
                 />
-                <DataManagement onFileImport={() => {/* TODO: Implement file import */}} isImporting={isImporting} />
+                <DataManagement onFileImport={handleFileImport} isImporting={isImporting} />
               </div>
               <div className="lg:col-span-2">
                 <CallList 

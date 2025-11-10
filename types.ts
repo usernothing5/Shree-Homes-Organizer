@@ -32,7 +32,7 @@ export interface User {
 export interface IncompleteLog {
   originalRow: Record<string, any>;
   parsedData: Partial<Omit<CallLog, 'id' | 'projectId'>>;
-  missingFields: Array<keyof Pick<CallLog, 'callerName' | 'clientName' | 'status' | 'timestamp'>>;
+  missingFields: Array<keyof Pick<CallLog, 'clientName' | 'status' | 'timestamp'>>;
 }
 
 export interface CallerStats {
