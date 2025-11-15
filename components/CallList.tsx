@@ -8,6 +8,7 @@ interface CallListProps {
   deleteCallLog: (id: string) => void;
   onEditNotes: (log: CallLog) => void;
   onUpdateFollowUpCount: (id: string, count: number) => void;
+  onRequestVisitStatusUpdate: (log: CallLog) => void;
 }
 
 const getStatusColor = (status: CallStatus): string => {
@@ -34,7 +35,7 @@ const isToday = (date: Date) => {
            date.getFullYear() === today.getFullYear();
 };
 
-const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; onEditNotes: (log: CallLog) => void; onUpdateFollowUpCount: (id: string, count: number) => void; }> = ({ log, deleteCallLog, onEditNotes, onUpdateFollowUpCount }) => {
+const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; onEditNotes: (log: CallLog) => void; onUpdateFollowUpCount: (id: string, count: number) => void; onRequestVisitStatusUpdate: (log: CallLog) => void; }> = ({ log, deleteCallLog, onEditNotes, onUpdateFollowUpCount, onRequestVisitStatusUpdate }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditingFollowUp, setIsEditingFollowUp] = useState(false);
   const [followUpCount, setFollowUpCount] = useState(String(log.followUpCount || 0));
@@ -66,6 +67,30 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(log.status)}`}>
             {log.status}
           </span>
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+            {(log.status === CallStatus.Interested || log.status === CallStatus.DetailsShare) && (
+            <button
+                type="button"
+                className={`${
+                log.visitWon ? 'bg-green-500' : 'bg-slate-200'
+                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2`}
+                role="switch"
+                aria-checked={!!log.visitWon}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRequestVisitStatusUpdate(log);
+                }}
+            >
+                <span className="sr-only">Toggle Visit Won</span>
+                <span
+                aria-hidden="true"
+                className={`${
+                    log.visitWon ? 'translate-x-5' : 'translate-x-0'
+                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                />
+            </button>
+            )}
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-center">
         {isEditingFollowUp ? (
@@ -125,7 +150,7 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
       </tr>
       {isExpanded && hasNotes && (
         <tr className="bg-slate-50">
-          <td colSpan={6} className="px-6 py-4 text-sm text-slate-600 border-t border-slate-200">
+          <td colSpan={8} className="px-6 py-4 text-sm text-slate-600 border-t border-slate-200">
             <h4 className="font-semibold mb-1 text-slate-800">Notes:</h4>
             <p className="whitespace-pre-wrap pl-2 border-l-2 border-slate-300">{log.notes}</p>
           </td>
@@ -136,7 +161,7 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
 };
 
 
-const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNotes, onUpdateFollowUpCount }) => {
+const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNotes, onUpdateFollowUpCount, onRequestVisitStatusUpdate }) => {
   const [view, setView] = useState<'today' | 'history'>('today');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -173,6 +198,27 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
       .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime());
   }, [filteredLogs]);
   
+  const renderTable = (logs: CallLog[]) => (
+    <table className="min-w-full divide-y divide-slate-200">
+      <thead className="bg-slate-50">
+        <tr>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Caller</th>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+          <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Visit Won</th>
+          <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Follow-ups</th>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
+          <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-slate-200">
+        {logs.map((log) => (
+          <CallLogRow key={log.id} log={log} deleteCallLog={deleteCallLog} onEditNotes={onEditNotes} onUpdateFollowUpCount={onUpdateFollowUpCount} onRequestVisitStatusUpdate={onRequestVisitStatusUpdate} />
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4">
@@ -214,23 +260,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
       <div className="overflow-x-auto">
         {view === 'today' && (
           todaysLogs.length > 0 ? (
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Caller</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Follow-ups</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
-                  <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-200">
-                {todaysLogs.map((log) => (
-                  <CallLogRow key={log.id} log={log} deleteCallLog={deleteCallLog} onEditNotes={onEditNotes} onUpdateFollowUpCount={onUpdateFollowUpCount} />
-                ))}
-              </tbody>
-            </table>
+            renderTable(todaysLogs)
           ) : (
             <div className="text-center py-10">
               <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -250,6 +280,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Caller</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Visit Won</th>
                   <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Follow-ups</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date & Time</th>
                   <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
@@ -259,12 +290,12 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                 {historicalLogsByDate.map(([date, logs]) => (
                   <React.Fragment key={date}>
                     <tr className="bg-slate-100">
-                      <td colSpan={6} className="px-6 py-2 text-sm font-bold text-slate-600">
+                      <td colSpan={8} className="px-6 py-2 text-sm font-bold text-slate-600">
                         {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
                       </td>
                     </tr>
                     {logs.map(log => (
-                      <CallLogRow key={log.id} log={log} deleteCallLog={deleteCallLog} onEditNotes={onEditNotes} onUpdateFollowUpCount={onUpdateFollowUpCount} />
+                      <CallLogRow key={log.id} log={log} deleteCallLog={deleteCallLog} onEditNotes={onEditNotes} onUpdateFollowUpCount={onUpdateFollowUpCount} onRequestVisitStatusUpdate={onRequestVisitStatusUpdate}/>
                     ))}
                   </React.Fragment>
                 ))}

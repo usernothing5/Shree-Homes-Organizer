@@ -30,7 +30,8 @@ import DataManagement from './components/DataManagement';
 import ImportStatusModal, { ImportResults } from './components/ImportStatusModal';
 import ImportReviewModal from './components/ImportReviewModal';
 import CallerPerformance, { DailyCallerOverrides } from './components/CallerPerformance';
-import FirestoreRulesMessage from './components/FirestoreRulesMessage';
+import ConfirmVisitStatusModal from './components/ConfirmVisitStatusModal';
+
 
 type LogUpdatePayload = {
   status?: CallStatus;
@@ -45,59 +46,32 @@ type StatOverrides = {
   };
 };
 
-interface CrmAppProps {
-  user: User;
-  onSignOut: () => void;
-}
+const CrmApp: React.FC = () => {
+  // Define a static user. All data will be tied to this ID.
+  // NOTE: Your Firestore security rules must be updated to allow writes
+  // without authentication for this to work, e.g., `allow read, write: if true;` for development.
+  const user: User = { uid: 'local-user', email: 'local@example.com' };
 
-const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [statOverrides, setStatOverrides] = useState<StatOverrides>({});
 
   const [isLoading, setIsLoading] = useState(true);
-  const [rulesError, setRulesError] = useState(false);
-
+  
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
   const [isManageProjectsModalOpen, setIsManageProjectsModalOpen] = useState(false);
   
   const [logToUpdate, setLogToUpdate] = useState<{ log: CallLog; type: 'details-share' | 'edit-notes' } | null>(null);
+  const [logToConfirmVisit, setLogToConfirmVisit] = useState<CallLog | null>(null);
 
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
   const [logsForReview, setLogsForReview] = useState<IncompleteLog[] | null>(null);
 
-  // --- Firestore Security Rules Check ---
-  useEffect(() => {
-    if (!user?.uid || !db) return;
-
-    const checkFirestoreRules = async () => {
-      try {
-        const testDocRef = doc(db, `users/${user.uid}/_config/rules_check`);
-        await setDoc(testDocRef, { check: true });
-        await deleteDoc(testDocRef);
-        if (rulesError) {
-          setRulesError(false);
-        }
-      } catch (error: any) {
-        if (error.code === 'permission-denied') {
-          console.error("Firestore Security Rules Error: Data access was denied. Please update your Firestore security rules.", error.message);
-          setRulesError(true);
-        } else {
-          console.error("An unexpected error occurred during rules check:", error);
-        }
-      }
-    };
-
-    checkFirestoreRules();
-  }, [user.uid, rulesError]);
-
-
   // --- Firestore Data Fetching ---
   useEffect(() => {
-    if (rulesError) return;
     setIsLoading(true);
     const projectsCol = collection(db, `users/${user.uid}/projects`);
     const projectsQuery = query(projectsCol);
@@ -124,10 +98,10 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     });
 
     return () => unsubscribeProjects();
-  }, [user.uid, rulesError]); // Re-run when user changes or rules are fixed
+  }, [user.uid]); // Re-run when user changes or rules are fixed
 
   useEffect(() => {
-    if (!activeProjectId || rulesError) return;
+    if (!activeProjectId) return;
     
     const logsCol = collection(db, `users/${user.uid}/callLogs`);
     const logsQuery = query(logsCol, where("projectId", "==", activeProjectId));
@@ -160,7 +134,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         unsubscribeLogs();
         unsubscribeOverrides();
     }
-  }, [user.uid, activeProjectId, rulesError]);
+  }, [user.uid, activeProjectId]);
 
   const activeProject = useMemo(() => projects.find(p => p.id === activeProjectId), [projects, activeProjectId]);
 
@@ -279,9 +253,22 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
             status: status,
             notes: findKey(['remark', 'notes']),
             timestamp: timestamp,
-            callbackTime: callbackTime,
             followUpCount: 0,
+            visitWon: false, // Default to false
         };
+
+        if (callbackTime) {
+            parsedData.callbackTime = callbackTime;
+        }
+        
+        const visitWonValue = findKey(['visit won']);
+        if (visitWonValue !== undefined && visitWonValue !== null) {
+            const visitWonString = String(visitWonValue).toLowerCase().trim();
+            if (visitWonString === 'true' || visitWonString === 'yes' || visitWonString === '1') {
+                parsedData.visitWon = true;
+            }
+        }
+
 
         const missingFields: Array<keyof Pick<CallLog, 'clientName' | 'status' | 'timestamp'>> = [];
         if (!parsedData.clientName) missingFields.push('clientName');
@@ -431,6 +418,22 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     await updateDoc(logRef, { followUpCount: count >= 0 ? count : 0 });
   }, [user.uid]);
 
+  const handleUpdateVisitStatus = useCallback(async (logId: string, visitWon: boolean) => {
+    const logRef = doc(db, `users/${user.uid}/callLogs`, logId);
+    await updateDoc(logRef, { visitWon });
+  }, [user.uid]);
+
+  const handleRequestVisitStatusUpdate = (log: CallLog) => {
+    setLogToConfirmVisit(log);
+  };
+
+  const handleConfirmVisitStatusUpdate = () => {
+    if (!logToConfirmVisit) return;
+    handleUpdateVisitStatus(logToConfirmVisit.id, !logToConfirmVisit.visitWon);
+    setLogToConfirmVisit(null);
+  };
+
+
   const handleAddProject = async (name: string) => {
     const newProject: Omit<Project, 'id'> = { name };
     const docRef = await addDoc(collection(db, `users/${user.uid}/projects`), newProject);
@@ -471,9 +474,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     }
   };
   
-  if (rulesError) {
-    return <FirestoreRulesMessage />;
-  }
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
@@ -526,6 +526,13 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
             onUpdate={(logId, notes) => handleUpdateLog(logId, { notes })}
         />
       )}
+      {logToConfirmVisit && (
+        <ConfirmVisitStatusModal
+            log={logToConfirmVisit}
+            onClose={() => setLogToConfirmVisit(null)}
+            onConfirm={handleConfirmVisitStatusUpdate}
+        />
+      )}
 
 
       <div className={`${activeCallback && !isResolveModalOpen ? 'pt-16' : ''}`}>
@@ -534,8 +541,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           activeProject={activeProject}
           onSwitchProject={handleSwitchProject}
           onManageProjects={() => setIsManageProjectsModalOpen(true)}
-          user={user}
-          onSignOut={onSignOut}
         />
         <main className="p-4 sm:p-6 lg:p-8">
           {isLoading ? (
@@ -563,6 +568,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
                   deleteCallLog={deleteCallLog}
                   onEditNotes={(log) => setLogToUpdate({ log, type: 'edit-notes' })}
                   onUpdateFollowUpCount={handleUpdateFollowUpCount}
+                  onRequestVisitStatusUpdate={handleRequestVisitStatusUpdate}
                 />
               </div>
             </div>

@@ -22,6 +22,7 @@ export interface CallLog {
   callbackTime?: string; // ISO string
   notes?: string;
   followUpCount?: number;
+  visitWon?: boolean;
 }
 
 export interface User {

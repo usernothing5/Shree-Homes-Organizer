@@ -49,6 +49,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
   const [callbackMinute, setCallbackMinute] = useState('');
   const [callbackPeriod, setCallbackPeriod] = useState<'AM' | 'PM'>('AM');
   const [notes, setNotes] = useState('');
+  const [visitWon, setVisitWon] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('callerName', callerName);
@@ -84,7 +85,13 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
       clientPhone: clientPhone.trim(),
       status,
       notes: notes.trim(),
+      visitWon: false,
     };
+    
+    if (status === CallStatus.Interested || status === CallStatus.DetailsShare) {
+        log.visitWon = visitWon;
+    }
+
 
     // For Call Back Later, the fields are required by the form.
     // For Details Share, it's optional. We only save if all fields are filled.
@@ -113,6 +120,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
     setCallbackMinute('');
     setCallbackPeriod('AM');
     setNotes('');
+    setVisitWon(false);
   };
 
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
@@ -170,6 +178,32 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
             ))}
           </select>
         </div>
+        {(status === CallStatus.Interested || status === CallStatus.DetailsShare) && (
+            <div className="flex items-center justify-between pt-2">
+                <span className="flex-grow flex flex-col">
+                    <label htmlFor="visitWon" className="text-sm font-medium text-slate-600">Visit Won</label>
+                    <span className="text-xs text-slate-500">Mark if the client visit was successful.</span>
+                </span>
+                <button
+                    type="button"
+                    id="visitWon"
+                    className={`${
+                    visitWon ? 'bg-green-500' : 'bg-slate-200'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2`}
+                    role="switch"
+                    aria-checked={visitWon}
+                    onClick={() => setVisitWon(!visitWon)}
+                >
+                    <span className="sr-only">Visit Won</span>
+                    <span
+                    aria-hidden="true"
+                    className={`${
+                        visitWon ? 'translate-x-5' : 'translate-x-0'
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    />
+                </button>
+            </div>
+        )}
         {(status === CallStatus.CallBackLater || status === CallStatus.DetailsShare) && (
           <div>
             <label className="block text-sm font-medium text-slate-600">

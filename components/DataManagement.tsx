@@ -28,27 +28,44 @@ const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, isImporti
       "FEEDBACK", 
       "Date", 
       "Callback Time", 
-      "Remark"
+      "Remark",
+      "Visit Won"
     ];
-    const exampleRow = [
+    const exampleInterestedRow = [
       "John Doe",
       "9876543210",
       "Interested",
       "2024-07-30 15:45",
       "",
-      "Interested in 2BHK flat."
+      "Interested in 2BHK flat.",
+      "TRUE"
     ];
-     const exampleCallbackRow = [
+    const exampleDetailsShareRow = [
+      "Peter Jones",
+      "1234567890",
+      "Details Share",
+      "2024-07-31 10:00",
+      "",
+      "Sent brochure.",
+      "FALSE"
+    ];
+    const exampleCallbackRow = [
       "Jane Smith",
       "5551234567",
       "Call Back Later",
       "2024-07-30 16:00",
       "2024-08-01 11:00",
-      "Asked to call back next week."
+      "Asked to call back next week.",
+      ""
     ];
 
     const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), exampleRow.join(","), exampleCallbackRow.join(",")].join("\n");
+      + [
+          headers.join(","), 
+          exampleInterestedRow.join(","),
+          exampleDetailsShareRow.join(","),
+          exampleCallbackRow.join(",")
+        ].join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
