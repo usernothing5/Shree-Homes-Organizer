@@ -6,21 +6,30 @@ interface HeaderProps {
   activeProject: Project | undefined;
   onSwitchProject: (id: string) => void;
   onManageProjects: () => void;
+  onSignOut: () => void;
+  userEmail: string | null;
 }
 
-const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects }) => {
+const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProject, onManageProjects, onSignOut, userEmail }) => {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (projectDropdownRef.current && !projectDropdownRef.current.contains(event.target as Node)) {
         setIsProjectDropdownOpen(false);
       }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setIsUserDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const userInitial = userEmail ? userEmail.charAt(0).toUpperCase() : '?';
 
   return (
     <header className="bg-slate-800 shadow-md">
@@ -77,6 +86,34 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
                 </div>
               </div>
             )}
+          </div>
+          <div className="h-8 w-px bg-slate-600"></div>
+          <div className="relative" ref={userDropdownRef}>
+              <button onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)} className="h-9 w-9 bg-sky-500 rounded-full flex items-center justify-center text-white font-bold text-lg hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-white">
+                {userInitial}
+              </button>
+              {isUserDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                  <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
+                    <div className="px-4 py-2 border-b border-slate-200">
+                      <p className="text-sm text-slate-500">Signed in as</p>
+                      <p className="text-sm font-medium text-slate-900 truncate">{userEmail}</p>
+                    </div>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onSignOut();
+                        setIsUserDropdownOpen(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700"
+                      role="menuitem"
+                    >
+                      Sign Out
+                    </a>
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       </div>

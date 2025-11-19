@@ -46,12 +46,12 @@ type StatOverrides = {
   };
 };
 
-const CrmApp: React.FC = () => {
-  // Define a static user. All data will be tied to this ID.
-  // NOTE: Your Firestore security rules must be updated to allow writes
-  // without authentication for this to work, e.g., `allow read, write: if true;` for development.
-  const user: User = { uid: 'local-user', email: 'local@example.com' };
+interface CrmAppProps {
+  user: User;
+  onSignOut: () => void;
+}
 
+const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
@@ -72,6 +72,7 @@ const CrmApp: React.FC = () => {
 
   // --- Firestore Data Fetching ---
   useEffect(() => {
+    if (!user) return;
     setIsLoading(true);
     const projectsCol = collection(db, `users/${user.uid}/projects`);
     const projectsQuery = query(projectsCol);
@@ -98,10 +99,10 @@ const CrmApp: React.FC = () => {
     });
 
     return () => unsubscribeProjects();
-  }, [user.uid]); // Re-run when user changes or rules are fixed
+  }, [user]);
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (!user || !activeProjectId) return;
     
     const logsCol = collection(db, `users/${user.uid}/callLogs`);
     const logsQuery = query(logsCol, where("projectId", "==", activeProjectId));
@@ -134,7 +135,7 @@ const CrmApp: React.FC = () => {
         unsubscribeLogs();
         unsubscribeOverrides();
     }
-  }, [user.uid, activeProjectId]);
+  }, [user, activeProjectId]);
 
   const activeProject = useMemo(() => projects.find(p => p.id === activeProjectId), [projects, activeProjectId]);
 
@@ -314,7 +315,7 @@ const CrmApp: React.FC = () => {
   };
   
   const batchImportLogs = async (logs: Array<Omit<CallLog, 'id' | 'projectId'>>, initialErrors: string[] = [], previouslyImportedCount: number = 0) => {
-    if (!activeProjectId) {
+    if (!activeProjectId || !user) {
       alert("No active project selected. Cannot import data.");
       setIsImporting(false);
       return;
@@ -370,7 +371,7 @@ const CrmApp: React.FC = () => {
 
   // --- Data Modification Functions ---
   const addCallLog = useCallback(async (log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'>) => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || !user) return;
     const newLog: Omit<CallLog, 'id'> = {
       ...log,
       timestamp: new Date().toISOString(),
@@ -383,13 +384,15 @@ const CrmApp: React.FC = () => {
         timestamp: Timestamp.fromDate(new Date(newLog.timestamp)),
         ...(newLog.callbackTime && { callbackTime: Timestamp.fromDate(new Date(newLog.callbackTime)) })
     });
-  }, [user.uid, activeProjectId]);
+  }, [user, activeProjectId]);
 
   const deleteCallLog = useCallback(async (id: string) => {
+    if (!user) return;
     await deleteDoc(doc(db, `users/${user.uid}/callLogs`, id));
-  }, [user.uid]);
+  }, [user]);
 
   const handleUpdateLog = useCallback(async (logId: string, updates: LogUpdatePayload) => {
+    if (!user) return;
     const logRef = doc(db, `users/${user.uid}/callLogs`, logId);
     
     const finalUpdates: any = { ...updates };
@@ -411,17 +414,19 @@ const CrmApp: React.FC = () => {
     setIsResolveModalOpen(false);
     setActiveCallback(null);
     setLogToUpdate(null);
-  }, [user.uid]);
+  }, [user]);
 
   const handleUpdateFollowUpCount = useCallback(async (logId: string, count: number) => {
+    if (!user) return;
     const logRef = doc(db, `users/${user.uid}/callLogs`, logId);
     await updateDoc(logRef, { followUpCount: count >= 0 ? count : 0 });
-  }, [user.uid]);
+  }, [user]);
 
   const handleUpdateVisitStatus = useCallback(async (logId: string, visitWon: boolean) => {
+    if (!user) return;
     const logRef = doc(db, `users/${user.uid}/callLogs`, logId);
     await updateDoc(logRef, { visitWon });
-  }, [user.uid]);
+  }, [user]);
 
   const handleRequestVisitStatusUpdate = (log: CallLog) => {
     setLogToConfirmVisit(log);
@@ -435,12 +440,14 @@ const CrmApp: React.FC = () => {
 
 
   const handleAddProject = async (name: string) => {
+    if (!user) return;
     const newProject: Omit<Project, 'id'> = { name };
     const docRef = await addDoc(collection(db, `users/${user.uid}/projects`), newProject);
     setActiveProjectId(docRef.id);
   };
 
   const handleDeleteProject = async (id: string) => {
+    if (!user) return;
     if (projects.length <= 1) {
       alert("You cannot delete the last project.");
       return;
@@ -541,6 +548,8 @@ const CrmApp: React.FC = () => {
           activeProject={activeProject}
           onSwitchProject={handleSwitchProject}
           onManageProjects={() => setIsManageProjectsModalOpen(true)}
+          onSignOut={onSignOut}
+          userEmail={user.email}
         />
         <main className="p-4 sm:p-6 lg:p-8">
           {isLoading ? (

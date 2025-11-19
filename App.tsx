@@ -1,6 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import CrmApp from './CrmApp';
-import { isConfigured } from './firebase';
+import { isConfigured, db } from './firebase';
+import { useAuth } from './hooks/useAuth';
+import AuthPage from './components/AuthPage';
+import { collection, getDocs } from 'firebase/firestore';
+import FirestoreRulesMessage from './components/FirestoreRulesMessage';
 
 const FirebaseConfigMessage: React.FC = () => (
   <div className="flex items-center justify-center min-h-screen bg-red-50 p-4">
@@ -46,11 +50,67 @@ const FirebaseConfigMessage: React.FC = () => (
   </div>
 );
 
+const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100">
+        <svg className="animate-spin h-10 w-10 text-sky-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="text-slate-600">{message}</p>
+    </div>
+);
+
+
 const App: React.FC = () => {
   if (!isConfigured) {
     return <FirebaseConfigMessage />;
   }
-  return <CrmApp />;
+
+  const { user, loading, signIn, signUp, signOut } = useAuth();
+  const [firestoreError, setFirestoreError] = useState(false);
+  const [checkingFirestore, setCheckingFirestore] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      setCheckingFirestore(true);
+      setFirestoreError(false);
+      // Test Firestore rules by attempting to read a user-specific collection.
+      const testCollection = collection(db, `users/${user.uid}/projects`);
+      getDocs(testCollection).then(() => {
+        // Success! Rules are permissive enough.
+        setCheckingFirestore(false);
+      }).catch(error => {
+        if (error.code === 'permission-denied') {
+          // This is the most likely error if rules aren't set up.
+          setFirestoreError(true);
+        }
+        console.error("Firestore access error:", error);
+        setCheckingFirestore(false);
+      });
+    } else {
+      // If there's no user, no need to check Firestore.
+      setCheckingFirestore(false);
+      setFirestoreError(false);
+    }
+  }, [user]);
+  
+  if (loading) {
+    return <LoadingScreen message="Initializing authentication..." />;
+  }
+
+  if (user && checkingFirestore) {
+    return <LoadingScreen message="Verifying data store access..." />;
+  }
+
+  if (!user) {
+    return <AuthPage onSignIn={signIn} onSignUp={signUp} />;
+  }
+  
+  if (firestoreError) {
+    return <FirestoreRulesMessage />;
+  }
+
+  return <CrmApp user={user} onSignOut={signOut} />;
 };
 
 export default App;
