@@ -54,8 +54,9 @@ interface CrmAppProps {
 
 const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [projects, setProjects] = useState<Project[]>([]);
-  // Initialize activeProjectId from localStorage to remember user's last choice
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => localStorage.getItem(`lastActiveProjectId_${user.uid}`));
+  // REMOVED: We no longer read from localStorage for the initial state.
+  // This forces the app to always re-evaluate the "freshest" project from the DB on load.
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [statOverrides, setStatOverrides] = useState<StatOverrides>({});
 
@@ -73,13 +74,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
   const [logsForReview, setLogsForReview] = useState<IncompleteLog[] | null>(null);
 
-  // Save active project selection whenever it changes
-  useEffect(() => {
-    if (activeProjectId) {
-      localStorage.setItem(`lastActiveProjectId_${user.uid}`, activeProjectId);
-    }
-  }, [activeProjectId, user.uid]);
-
   // --- Firestore Data Fetching ---
   useEffect(() => {
     if (!user) return;
@@ -92,8 +86,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       const fetchedProjects: Project[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Project));
       
       // IMPORTANT: Sort projects by 'lastUpdated' DESCENDING.
-      // This ensures the most recently active project is always first.
-      // If dates are missing or equal, fallback to name and ID.
+      // This ensures the most recently active project is always first (Index 0).
       fetchedProjects.sort((a, b) => {
           const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
           const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
@@ -104,25 +97,16 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       setProjects(fetchedProjects);
 
       if (fetchedProjects.length > 0) {
-        if (!activeProjectId) {
-             // If no active project in state (e.g. fresh reload), try localStorage first
-             const savedId = localStorage.getItem(`lastActiveProjectId_${user.uid}`);
-             const validSaved = fetchedProjects.find(p => p.id === savedId);
-             
-             if (validSaved) {
-                 setActiveProjectId(validSaved.id);
-             } else {
-                 // If no saved pref or saved pref is invalid (deleted), pick the most recently updated one (Index 0)
-                 setActiveProjectId(fetchedProjects[0].id);
-             }
-        } else {
-           // If active project exists in state, ensure it still exists in DB (it might have been deleted on another device)
-           if (!fetchedProjects.some(p => p.id === activeProjectId)) {
-               setActiveProjectId(fetchedProjects[0].id);
-           }
+        // CROSS-DEVICE SYNC LOGIC:
+        // If we don't have an active project selected yet, OR if the currently selected project
+        // has been deleted/lost, automatically switch to the project at the top of the list.
+        // Since the list is sorted by 'lastUpdated', this means we always jump to the project
+        // that was most recently used on ANY device.
+        if (!activeProjectId || !fetchedProjects.some(p => p.id === activeProjectId)) {
+             setActiveProjectId(fetchedProjects[0].id);
         }
       } else {
-        // If no projects, create a default one
+        // If no projects exist at all, create a default one
         const defaultProject: Omit<Project, 'id'> = { 
             name: 'Default Project',
             lastUpdated: new Date().toISOString()
@@ -148,31 +132,26 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     });
 
     return () => unsubscribeProjects();
-  }, [user]); // activeProjectId excluded to prevent loop
+  }, [user, activeProjectId]); // activeProjectId dependency ensures we re-verify if it's valid
 
   useEffect(() => {
     if (!user || !activeProjectId) return;
     
     const logsCol = collection(db, `users/${user.uid}/callLogs`);
-    // We use a simple query without orderBy to prevent "Missing Index" errors on new projects.
-    // Sorting is handled in memory below.
     const logsQuery = query(logsCol, where("projectId", "==", activeProjectId));
     
     const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
         const fetchedLogs: CallLog[] = snapshot.docs.map(d => ({
             id: d.id,
             ...d.data(),
-            // Firestore timestamps need to be converted
             timestamp: (d.data().timestamp as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
             callbackTime: (d.data().callbackTime as Timestamp)?.toDate().toISOString()
         } as CallLog));
         
-        // Sort logs by timestamp descending (Newest first)
         fetchedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setCallLogs(fetchedLogs);
     });
 
-    // Fetch overrides for the current project
     const overridesDoc = doc(db, `users/${user.uid}/statOverrides`, activeProjectId);
     const unsubscribeOverrides = onSnapshot(overridesDoc, (snapshot) => {
         if(snapshot.exists()) {
@@ -195,6 +174,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       if (!user || !activeProjectId) return;
       try {
         const projectRef = doc(db, `users/${user.uid}/projects`, activeProjectId);
+        // This updates the 'lastUpdated' field, which triggers the sorting in the main useEffect,
+        // causing this project to float to the top for all other devices.
         await updateDoc(projectRef, { lastUpdated: new Date().toISOString() });
       } catch (err) {
           console.warn("Failed to update project timestamp", err);
@@ -317,7 +298,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
             notes: findKey(['remark', 'notes']),
             timestamp: timestamp,
             followUpCount: 0,
-            visitWon: false, // Default to false
+            visitWon: false,
         };
 
         if (callbackTime) {
@@ -360,19 +341,13 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const handleCompleteReview = (reviewedLogs: Array<Omit<CallLog, 'id' | 'projectId'>>) => {
     const originalReviewCount = logsForReview?.length || 0;
     const errors: string[] = [];
-    
-    // Any logs that were skipped are not in reviewedLogs.
     const skippedCount = originalReviewCount - reviewedLogs.length;
     if (skippedCount > 0) {
         errors.push(`${skippedCount} row(s) were skipped by the user during review.`);
     }
 
     const previouslyImportedCount = importResults?.successCount || 0;
-    
     setLogsForReview(null);
-
-    // This runs a batch import for the logs that passed the review step.
-    // It's called with the errors array from the skipped logs.
     batchImportLogs(reviewedLogs, errors, previouslyImportedCount);
   };
   
@@ -403,13 +378,11 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       batch.set(docRef, logWithProject);
     });
 
-    // Update Project Timestamp
     const projectRef = doc(db, `users/${user.uid}/projects`, activeProjectId);
     batch.update(projectRef, { lastUpdated: new Date().toISOString() });
 
     try {
       await batch.commit();
-      // If we are not in a review flow, set the results now.
       if(!logsForReview) {
           setImportResults({ 
             successCount: previouslyImportedCount + logs.length, 
@@ -427,7 +400,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           });
       }
     } finally {
-        // Only stop importing and show final results if the review modal is not open
         if (!logsForReview) {
             setIsImporting(false);
         }
@@ -439,7 +411,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         alert("No data available to export.");
         return;
     }
-    
     const data = callLogs.map(log => ({
         "Client Name": log.clientName,
         "Phone": log.clientPhone,
@@ -476,14 +447,12 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       followUpCount: 0,
     };
     
-    // Add log
     await addDoc(collection(db, `users/${user.uid}/callLogs`), {
         ...newLog,
         timestamp: Timestamp.fromDate(new Date(newLog.timestamp)),
         ...(newLog.callbackTime && { callbackTime: Timestamp.fromDate(new Date(newLog.callbackTime)) })
     });
     
-    // Update Project Timestamp
     await touchProjectTimestamp();
 
   }, [user, activeProjectId]);
@@ -497,19 +466,15 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const handleUpdateLog = useCallback(async (logId: string, updates: LogUpdatePayload) => {
     if (!user) return;
     const logRef = doc(db, `users/${user.uid}/callLogs`, logId);
-    
     const finalUpdates: any = { ...updates };
-
-    // Do NOT update the original timestamp on every edit.
     delete finalUpdates.timestamp;
 
-    // Handle callbackTime conversion and clearing
     if ('callbackTime' in finalUpdates) {
       finalUpdates.callbackTime = finalUpdates.callbackTime ? Timestamp.fromDate(new Date(finalUpdates.callbackTime)) : null;
     }
     
     if (finalUpdates.status && finalUpdates.status !== CallStatus.CallBackLater) {
-        finalUpdates.callbackTime = null; // Clear callback time if status changes
+        finalUpdates.callbackTime = null;
     }
 
     await updateDoc(logRef, finalUpdates);
@@ -562,10 +527,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       return;
     }
     if (window.confirm("Are you sure you want to delete this project and all its associated call logs? This action cannot be undone.")) {
-      // Delete the project doc
       await deleteDoc(doc(db, `users/${user.uid}/projects`, id));
       
-      // Batch delete all associated call logs
       const logsQuery = query(collection(db, `users/${user.uid}/callLogs`), where("projectId", "==", id));
       const logsSnapshot = await getDocs(logsQuery);
       const batch = writeBatch(db);
@@ -574,20 +537,24 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       });
       await batch.commit();
 
-      // Switch to another project
       if (id === activeProjectId) {
-        const remainingProjects = projects.filter(p => p.id !== id);
-        // Remaining projects are already sorted by lastUpdated because of the main useEffect
-        setActiveProjectId(remainingProjects[0]?.id || null);
+        // The main useEffect will pick up the deletion and switch to the next available project
+        // automatically because of the safety check logic.
+        // setActiveProjectId will happen in useEffect.
       }
     }
   };
 
   const handleSwitchProject = (id: string) => {
     if (id !== activeProjectId) {
-      setCallLogs([]); // Clear logs briefly to avoid flicker
+      setCallLogs([]);
       setActiveProjectId(id);
       setActiveCallback(null);
+      // We also touch the project here to indicate it is now "active" and float it to top
+      if(user) {
+           const projectRef = doc(db, `users/${user.uid}/projects`, id);
+           updateDoc(projectRef, { lastUpdated: new Date().toISOString() }).catch(console.warn);
+      }
     }
   };
   
@@ -597,6 +564,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
        {isManageProjectsModalOpen && (
         <ManageProjectsModal
           projects={projects}
+          activeProjectId={activeProjectId || ''}
           onAddProject={handleAddProject}
           onDeleteProject={handleDeleteProject}
           onClose={() => setIsManageProjectsModalOpen(false)}

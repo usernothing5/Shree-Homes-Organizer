@@ -4,12 +4,13 @@ import { Project } from '../types';
 
 interface ManageProjectsModalProps {
   projects: Project[];
+  activeProjectId: string;
   onAddProject: (name: string) => void;
   onDeleteProject: (id: string) => void;
   onClose: () => void;
 }
 
-const ManageProjectsModal: React.FC<ManageProjectsModalProps> = ({ projects, onAddProject, onDeleteProject, onClose }) => {
+const ManageProjectsModal: React.FC<ManageProjectsModalProps> = ({ projects, activeProjectId, onAddProject, onDeleteProject, onClose }) => {
   const [newProjectName, setNewProjectName] = useState('');
 
   const handleAdd = (e: React.FormEvent) => {
@@ -18,6 +19,18 @@ const ManageProjectsModal: React.FC<ManageProjectsModalProps> = ({ projects, onA
       onAddProject(newProjectName.trim());
       setNewProjectName('');
     }
+  };
+
+  const formatLastActive = (dateString?: string) => {
+      if (!dateString) return 'Never/Old';
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)} mins ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
+      return date.toLocaleDateString();
   };
 
   return (
@@ -52,18 +65,21 @@ const ManageProjectsModal: React.FC<ManageProjectsModalProps> = ({ projects, onA
         <div className="space-y-2 max-h-60 overflow-y-auto">
           <h3 className="text-lg font-semibold text-slate-600 mb-2">Existing Projects</h3>
           {projects.map(project => (
-            <div key={project.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-md">
+            <div key={project.id} className={`flex justify-between items-center p-3 rounded-md ${project.id === activeProjectId ? 'bg-sky-50 border border-sky-200' : 'bg-slate-50'}`}>
               <div className="flex flex-col">
-                  <span className="text-slate-800 font-medium">{project.name}</span>
+                  <span className={`font-medium ${project.id === activeProjectId ? 'text-sky-800' : 'text-slate-800'}`}>
+                      {project.name} {project.id === activeProjectId && <span className="text-xs font-bold bg-sky-200 text-sky-800 px-1.5 py-0.5 rounded ml-1">(Current)</span>}
+                  </span>
                   <span className="text-xs text-slate-500">
-                      Last Active: {project.lastUpdated ? new Date(project.lastUpdated).toLocaleDateString() : 'Unknown'}
+                      Last Active: {formatLastActive(project.lastUpdated)}
                   </span>
               </div>
               <button
                 onClick={() => onDeleteProject(project.id)}
-                disabled={projects.length <= 1}
-                className="text-red-500 hover:text-red-700 disabled:text-slate-400 disabled:cursor-not-allowed p-2"
+                disabled={projects.length <= 1 || project.id === activeProjectId}
+                className="text-red-500 hover:text-red-700 disabled:text-slate-300 disabled:cursor-not-allowed p-2 transition-colors"
                 aria-label={`Delete ${project.name}`}
+                title={project.id === activeProjectId ? "Cannot delete active project" : "Delete project"}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
