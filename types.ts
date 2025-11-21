@@ -1,3 +1,4 @@
+
 export enum CallStatus {
   Interested = 'Interested',
   NotInterested = 'Not Interested',
@@ -9,6 +10,7 @@ export enum CallStatus {
 export interface Project {
   id: string;
   name: string;
+  lastUpdated?: string; // ISO string
 }
 
 export interface CallLog {

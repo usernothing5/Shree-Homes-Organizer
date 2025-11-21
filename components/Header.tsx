@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Project } from '../types';
 
@@ -31,6 +32,18 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
 
   const userInitial = userEmail ? userEmail.charAt(0).toUpperCase() : '?';
 
+  const formatLastActive = (dateString?: string) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      
+      if (diff < 60000) return 'Active now';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+      return date.toLocaleDateString();
+  };
+
   return (
     <header className="bg-slate-800 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
@@ -53,7 +66,7 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
               </svg>
             </button>
             {isProjectDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+              <div className="absolute right-0 mt-2 w-72 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                 <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
                   {projects.map(project => (
                     <a
@@ -64,10 +77,15 @@ const Header: React.FC<HeaderProps> = ({ projects, activeProject, onSwitchProjec
                         onSwitchProject(project.id);
                         setIsProjectDropdownOpen(false);
                       }}
-                      className={`block px-4 py-2 text-sm ${activeProject?.id === project.id ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}
+                      className={`flex justify-between items-center px-4 py-2 text-sm ${activeProject?.id === project.id ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}
                       role="menuitem"
                     >
-                      {project.name}
+                      <span className="truncate">{project.name}</span>
+                      {project.lastUpdated && (
+                          <span className="text-xs text-slate-400 ml-2 flex-shrink-0">
+                              {formatLastActive(project.lastUpdated)}
+                          </span>
+                      )}
                     </a>
                   ))}
                   <div className="border-t border-slate-200 my-1"></div>

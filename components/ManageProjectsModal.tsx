@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Project } from '../types';
 
@@ -52,11 +53,16 @@ const ManageProjectsModal: React.FC<ManageProjectsModalProps> = ({ projects, onA
           <h3 className="text-lg font-semibold text-slate-600 mb-2">Existing Projects</h3>
           {projects.map(project => (
             <div key={project.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-md">
-              <span className="text-slate-800">{project.name}</span>
+              <div className="flex flex-col">
+                  <span className="text-slate-800 font-medium">{project.name}</span>
+                  <span className="text-xs text-slate-500">
+                      Last Active: {project.lastUpdated ? new Date(project.lastUpdated).toLocaleDateString() : 'Unknown'}
+                  </span>
+              </div>
               <button
                 onClick={() => onDeleteProject(project.id)}
                 disabled={projects.length <= 1}
-                className="text-red-500 hover:text-red-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+                className="text-red-500 hover:text-red-700 disabled:text-slate-400 disabled:cursor-not-allowed p-2"
                 aria-label={`Delete ${project.name}`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
