@@ -636,7 +636,11 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
               <div className="lg:col-span-1 space-y-6">
-                <CallLogger addCallLog={addCallLog} isReady={!!activeProjectId} />
+                <CallLogger 
+                    addCallLog={addCallLog} 
+                    isReady={!!activeProjectId} 
+                    projectName={activeProject?.name}
+                />
                 <Stats callLogs={callLogs} />
                 <CallerPerformance 
                   todaysLogs={callLogs.filter(log => new Date(log.timestamp).toDateString() === new Date().toDateString())}

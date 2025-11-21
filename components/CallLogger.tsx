@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CallLog, CallStatus } from '../types';
 
 interface CallLoggerProps {
   addCallLog: (log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'>) => Promise<void>;
   isReady: boolean;
+  projectName?: string;
 }
 
 const getInitialIndianDateTime = () => {
@@ -41,7 +42,7 @@ const getInitialIndianDateTime = () => {
 };
 
 
-const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
+const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectName }) => {
   const [callerName, setCallerName] = useState(() => localStorage.getItem('callerName') || '');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -53,6 +54,12 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
   const [notes, setNotes] = useState('');
   const [visitWon, setVisitWon] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Ref to track if component is mounted to prevent state updates on unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+      return () => { isMounted.current = false; };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('callerName', callerName);
@@ -73,8 +80,9 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!isReady) {
-        alert("System is not ready. Please wait for the project to load.");
+        alert("System is syncing with the database. Please wait a moment.");
         return;
     }
     if (!callerName.trim()) {
@@ -101,9 +109,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
         log.visitWon = visitWon;
     }
 
-
-    // For Call Back Later, the fields are required by the form.
-    // For Details Share, it's optional. We only save if all fields are filled.
     if (callbackDate && callbackHour && callbackMinute) {
       if (status === CallStatus.CallBackLater || status === CallStatus.DetailsShare) {
         let hour24 = parseInt(callbackHour, 10);
@@ -121,22 +126,41 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
     }
 
     try {
-        await addCallLog(log);
-        // Only clear form if successful
-        setClientName('');
-        setClientPhone('');
-        setStatus(CallStatus.Interested);
-        setCallbackDate('');
-        setCallbackHour('');
-        setCallbackMinute('');
-        setCallbackPeriod('AM');
-        setNotes('');
-        setVisitWon(false);
+        // Create a race condition: if addCallLog takes too long (> 5s), we assume network issue but reset UI
+        const savePromise = addCallLog(log);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Network timeout")), 8000)
+        );
+
+        await Promise.race([savePromise, timeoutPromise]);
+
+        if (isMounted.current) {
+            // Only clear form if successful
+            setClientName('');
+            setClientPhone('');
+            setStatus(CallStatus.Interested);
+            setCallbackDate('');
+            setCallbackHour('');
+            setCallbackMinute('');
+            setCallbackPeriod('AM');
+            setNotes('');
+            setVisitWon(false);
+            setIsSaving(false);
+        }
     } catch (error: any) {
         console.error("Error saving log:", error);
-        alert(`Failed to save call log: ${error.message || "Unknown error"}. Please check your internet connection and permissions.`);
-    } finally {
-        setIsSaving(false);
+        if (isMounted.current) {
+            setIsSaving(false);
+            if (error.message === "Network timeout") {
+                alert("The network is slow. The log is being saved in the background. You can continue working.");
+                 // Even on timeout, we clear the form to let them continue, assuming persistence will handle it.
+                setClientName('');
+                setClientPhone('');
+                setNotes('');
+            } else {
+                alert(`Failed to save call log: ${error.message || "Unknown error"}. Please check your internet connection.`);
+            }
+        }
     }
   };
 
@@ -144,8 +168,15 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
   const minuteOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-xl font-bold mb-4 text-slate-700">Log New Call</h2>
+    <div className="bg-white p-6 rounded-lg shadow-md border-t-4 border-sky-500">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-slate-700">Log New Call</h2>
+        {projectName && (
+            <span className="text-xs bg-sky-100 text-sky-800 px-2 py-1 rounded-full font-medium truncate max-w-[150px]">
+                {projectName}
+            </span>
+        )}
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="callerName" className="block text-sm font-medium text-slate-600">Caller Name</label>
@@ -283,10 +314,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
         </div>
         <button
           type="submit"
-          disabled={isSaving || !isReady}
+          disabled={isSaving}
           className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
         >
-          {isSaving ? 'Saving...' : (!isReady ? 'Loading Project...' : 'Save Call Log')}
+          {isSaving ? 'Saving...' : (!isReady ? 'Loading... Please Wait' : 'Save Call Log')}
         </button>
       </form>
     </div>

@@ -1,7 +1,5 @@
 
-
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CallLog, CallStatus } from '../types';
 
 interface CallListProps {
@@ -165,6 +163,7 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
 const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNotes, onUpdateFollowUpCount, onRequestVisitStatusUpdate }) => {
   const [view, setView] = useState<'today' | 'history'>('today');
   const [searchQuery, setSearchQuery] = useState('');
+  const [initialized, setInitialized] = useState(false);
 
   const filteredLogs = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -184,6 +183,17 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
       return callLogs.some(log => log.timestamp.split('T')[0] !== todayString);
   }, [callLogs]);
 
+  // AUTO-SWITCH to History if Today is empty but we have logs
+  useEffect(() => {
+      if (!initialized && callLogs.length > 0) {
+          if (todaysLogs.length === 0) {
+              setView('history');
+          }
+          setInitialized(true);
+      }
+  }, [callLogs, todaysLogs, initialized]);
+
+
   const historicalLogsByDate = useMemo(() => {
     const groups: { [key: string]: CallLog[] } = {};
     const todayString = new Date().toISOString().split('T')[0];
@@ -192,7 +202,12 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
       const logDate = new Date(log.timestamp);
       const dateString = logDate.toISOString().split('T')[0];
 
-      if (dateString !== todayString) {
+      if (dateString !== todayString || view === 'history') {
+        // If viewing history, include everything not in "Today" view, 
+        // OR if specifically in history view, we can group everything by date.
+        // Standard logic: History usually means "past". But if we switch to history view because today is empty,
+        // we should just show all dates.
+        
         if (!groups[dateString]) {
           groups[dateString] = [];
         }
@@ -202,7 +217,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
 
     return Object.entries(groups)
       .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime());
-  }, [filteredLogs]);
+  }, [filteredLogs, view]);
   
   const renderTable = (logs: CallLog[]) => (
     <table className="min-w-full divide-y divide-slate-200">
@@ -229,7 +244,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4">
         <h2 className="text-xl font-bold text-slate-700">
-          {view === 'today' ? "Today's Call Logs" : "Call Log History"}
+          {view === 'today' ? "Today's Call Logs" : "All Call Logs"}
         </h2>
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <div className="relative w-full sm:w-auto">
@@ -258,7 +273,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                 onClick={() => setView('history')}
                 className={`px-3 py-1 rounded-full transition-colors ${view === 'history' ? 'bg-white text-slate-800 shadow' : 'text-slate-600 hover:bg-slate-300'}`}
                 >
-                History
+                History / All
                 </button>
             </div>
         </div>
@@ -275,9 +290,9 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
               <p className="mt-2 text-sm text-slate-500">
                 {searchQuery ? `No logs found matching "${searchQuery}".` : 'No calls logged for today.'}
               </p>
-              {!searchQuery && hasHistory && (
-                 <button onClick={() => setView('history')} className="mt-4 text-sky-600 hover:underline text-sm font-medium">
-                     View Past Logs in History
+              {callLogs.length > 0 && (
+                 <button onClick={() => setView('history')} className="mt-4 bg-sky-50 text-sky-700 px-4 py-2 rounded-md hover:bg-sky-100 transition-colors text-sm font-medium border border-sky-200">
+                     View All Logs
                  </button>
               )}
             </div>
@@ -318,7 +333,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
               <p className="mt-2 text-sm text-slate-500">
-                {searchQuery ? `No logs found matching "${searchQuery}".` : 'No past call logs found.'}
+                {searchQuery ? `No logs found matching "${searchQuery}".` : 'No call logs found.'}
               </p>
             </div>
           )
