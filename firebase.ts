@@ -3,25 +3,21 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // --- Firebase Configuration ---
-// IMPORTANT: Replace the placeholder values with your own Firebase project's configuration.
-// You can find this configuration in your Firebase project settings.
 const firebaseConfig = {
-  apiKey: "AIzaSyAbNQ_Buy8OtCzQcg_yTG7TCKCdzpwCAUI",
-  authDomain: "shreehomescrm.firebaseapp.com",
-  projectId: "shreehomescrm",
-  storageBucket: "shreehomescrm.firebasestorage.app",
-  messagingSenderId: "490822742991",
-  appId: "1:490822742991:web:132ba375b12f57a0d658ba",
-  measurementId: "G-8C2K2CVT07"
+  apiKey: "AIzaSyDMGU6S63Is1mDz2B0Lp83-1rV54ocIQmo",
+  authDomain: "shreehomescrm-d7c2d.firebaseapp.com",
+  projectId: "shreehomescrm-d7c2d",
+  storageBucket: "shreehomescrm-d7c2d.firebasestorage.app",
+  messagingSenderId: "134845887694",
+  appId: "1:134845887694:web:8c048ae39203a420478c9f",
+  measurementId: "G-6ZM4EV5PN4"
 };
 
 // --- Service Initialization ---
 let app;
-let auth;
-let db;
+let auth: any;
+let db: any;
 
-// A more robust flag to check if the Firebase config has been set by the user.
-// It checks for common placeholder patterns in essential fields.
 export const isConfigured = 
   firebaseConfig.apiKey && 
   !firebaseConfig.apiKey.includes("YOUR_") &&
@@ -29,16 +25,15 @@ export const isConfigured =
   !firebaseConfig.projectId.includes("YOUR_");
 
 if (isConfigured) {
-  // Initialize Firebase
-  app = initializeApp(firebaseConfig);
-  // Export the necessary Firebase services
-  auth = getAuth(app);
-  db = getFirestore(app);
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (error) {
+    console.error("Firebase initialization error:", error);
+  }
 } else {
-  // If not configured, show a message in the console.
-  // The UI will also show a message via the `isConfigured` flag.
-  console.warn("Firebase is not configured. Please add your project credentials to firebase.ts");
+  console.warn("Firebase is not configured. Please check firebase.ts");
 }
 
-// Export the services. They will be undefined if not configured.
 export { auth, db };

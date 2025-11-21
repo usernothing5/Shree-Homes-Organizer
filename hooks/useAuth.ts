@@ -3,6 +3,8 @@ import {
   onAuthStateChanged, 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as firebaseSignOut,
   User as FirebaseUser,
 } from 'firebase/auth';
@@ -14,6 +16,11 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth) {
+        setLoading(false);
+        return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         setUser({
@@ -31,16 +38,17 @@ export const useAuth = () => {
   }, []);
 
   const signUp = useCallback(async (email, password) => {
+    if (!auth) throw new Error("Firebase not initialized");
     try {
       await createUserWithEmailAndPassword(auth, email, password);
     } catch (error) {
       console.error("Sign up error", error);
-      // Re-throw the error to be caught in the component
       throw error;
     }
   }, []);
 
   const signIn = useCallback(async (email, password) => {
+    if (!auth) throw new Error("Firebase not initialized");
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
@@ -49,7 +57,19 @@ export const useAuth = () => {
     }
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    if (!auth) throw new Error("Firebase not initialized");
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google sign in error", error);
+      throw error;
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
+    if (!auth) throw new Error("Firebase not initialized");
     try {
       await firebaseSignOut(auth);
     } catch (error) {
@@ -58,5 +78,5 @@ export const useAuth = () => {
     }
   }, []);
 
-  return { user, loading, signUp, signIn, signOut };
+  return { user, loading, signUp, signIn, signInWithGoogle, signOut };
 };

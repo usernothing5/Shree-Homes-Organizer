@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from './firebase';
 import {
@@ -368,6 +369,35 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     }
   };
 
+  const handleExport = () => {
+    if (callLogs.length === 0) {
+        alert("No data available to export.");
+        return;
+    }
+    
+    const data = callLogs.map(log => ({
+        "Client Name": log.clientName,
+        "Phone": log.clientPhone,
+        "Status": log.status,
+        "Caller": log.callerName,
+        "Notes": log.notes,
+        "Date": new Date(log.timestamp).toLocaleDateString(),
+        "Time": new Date(log.timestamp).toLocaleTimeString(),
+        "Callback Time": log.callbackTime ? new Date(log.callbackTime).toLocaleString() : '',
+        "Visit Won": log.visitWon ? "Yes" : "No",
+        "Follow-ups": log.followUpCount
+    }));
+
+    // @ts-ignore
+    const ws = XLSX.utils.json_to_sheet(data);
+    // @ts-ignore
+    const wb = XLSX.utils.book_new();
+    // @ts-ignore
+    XLSX.utils.book_append_sheet(wb, ws, activeProject?.name || "Call Logs");
+    // @ts-ignore
+    XLSX.writeFile(wb, `${activeProject?.name || "ShreeHomes_Data"}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
 
   // --- Data Modification Functions ---
   const addCallLog = useCallback(async (log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'>) => {
@@ -569,7 +599,11 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
                   callLogs={callLogs} 
                   onUpdate={(log) => setLogToUpdate({ log, type: 'details-share' })} 
                 />
-                <DataManagement onFileImport={handleFileImport} isImporting={isImporting} />
+                <DataManagement 
+                    onFileImport={handleFileImport} 
+                    isImporting={isImporting}
+                    onExport={handleExport}
+                />
               </div>
               <div className="lg:col-span-2">
                 <CallList 

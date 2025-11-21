@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 interface AuthPageProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
+  onSignInWithGoogle: () => Promise<void>;
 }
 
-const AuthPage: React.FC<AuthPageProps> = ({ onSignIn, onSignUp }) => {
+const AuthPage: React.FC<AuthPageProps> = ({ onSignIn, onSignUp, onSignInWithGoogle }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -34,6 +35,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onSignIn, onSignUp }) => {
                 break;
             case 'auth/user-not-found':
             case 'auth/wrong-password':
+            case 'auth/invalid-credential':
                 setError('Invalid email or password.');
                 break;
             case 'auth/email-already-in-use':
@@ -41,6 +43,9 @@ const AuthPage: React.FC<AuthPageProps> = ({ onSignIn, onSignUp }) => {
                 break;
             case 'auth/weak-password':
                  setError('Password should be at least 6 characters long.');
+                 break;
+            case 'auth/unauthorized-domain':
+                 setError(`Domain unauthorized. Add "${window.location.hostname}" to Firebase Console > Auth > Settings > Authorized Domains.`);
                  break;
             default:
                 setError('An unexpected error occurred. Please try again.');
@@ -51,9 +56,28 @@ const AuthPage: React.FC<AuthPageProps> = ({ onSignIn, onSignUp }) => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+        await onSignInWithGoogle();
+    } catch (err: any) {
+        console.error(err);
+        if (err.code === 'auth/popup-closed-by-user') {
+            setError('Sign in cancelled.');
+        } else if (err.code === 'auth/unauthorized-domain') {
+            setError(`Configuration Error: The domain "${window.location.hostname}" is not authorized. Please add it to your Firebase Console under Authentication > Settings > Authorized Domains.`);
+        } else {
+            setError('Failed to sign in with Google. Please try again. ' + (err.message ? `(${err.message})` : ''));
+        }
+    } finally {
+        setLoading(false);
+    }
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-100">
-      <div className="text-center p-8 bg-white rounded-lg shadow-2xl max-w-sm w-full">
+      <div className="text-center p-8 bg-white rounded-lg shadow-2xl max-w-md w-full">
         <div className="flex items-center justify-center mb-6">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-sky-500 mr-3" viewBox="0 0 20 20" fill="currentColor">
             <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
@@ -93,7 +117,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ onSignIn, onSignUp }) => {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded-md">{error}</p>}
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md text-left border border-red-200 break-words">
+               <p className="font-bold flex items-center gap-1">
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                 Error
+               </p>
+               {error}
+            </div>
+          )}
           
           <button
             type="submit"
@@ -111,6 +143,35 @@ const AuthPage: React.FC<AuthPageProps> = ({ onSignIn, onSignUp }) => {
              ) : (isSignUp ? 'Sign Up' : 'Sign In')}
           </button>
         </form>
+
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-slate-500">Or continue with</span>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              className="w-full inline-flex justify-center items-center py-2 px-4 border border-slate-300 rounded-md shadow-sm bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:bg-slate-100 disabled:cursor-not-allowed transition-colors"
+            >
+               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12.0003 20.45C16.6043 20.45 20.4603 16.95 21.4953 12.6H12.0003V9H21.8953C21.9603 9.66 22.0003 10.36 22.0003 11.12C22.0003 17.03 17.8903 21.45 12.0003 21.45C6.78029 21.45 2.55029 17.22 2.55029 12C2.55029 6.78 6.78029 2.55 12.0003 2.55C14.4003 2.55 16.5003 3.38 18.1403 4.75L15.5903 7.3C14.8703 6.65 13.6003 6.15 12.0003 6.15C8.89029 6.15 6.29029 8.7 6.29029 12C6.29029 15.3 8.89029 17.85 12.0003 17.85C15.0203 17.85 16.9003 15.88 17.3303 13.6H12.0003V20.45Z"
+                    fill="#EA4335"
+                  />
+               </svg>
+               <span className="ml-2">Google</span>
+            </button>
+          </div>
+        </div>
+
         <p className="mt-6 text-center text-sm text-slate-600">
           {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
           <button onClick={() => { setIsSignUp(!isSignUp); setError(null); }} className="font-medium text-sky-600 hover:text-sky-500">

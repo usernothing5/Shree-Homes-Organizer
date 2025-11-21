@@ -1,11 +1,13 @@
+
 import React, { useRef } from 'react';
 
 interface DataManagementProps {
   onFileImport: (file: File) => void;
+  onExport: () => void;
   isImporting: boolean;
 }
 
-const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, isImporting }) => {
+const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, onExport, isImporting }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,16 +82,29 @@ const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, isImporti
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-bold mb-4 text-slate-700">Data Management</h2>
-      <div className="space-y-6">
+      <div className="space-y-6 divide-y divide-slate-200">
+        
+        {/* Export Section */}
+        <div className="pb-2">
+            <h3 className="font-semibold text-slate-600 mb-2">Save & Export</h3>
+            <p className="text-sm text-slate-500 mb-3">Save a copy of all your current call logs to an Excel file on your device.</p>
+            <button
+                onClick={onExport}
+                className="w-full flex justify-center items-center gap-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                Save / Export Data
+            </button>
+        </div>
+
         {/* Import Section */}
-        <div className="space-y-4">
+        <div className="pt-4 space-y-3">
             <div>
                 <h3 className="font-semibold text-slate-600">Import Data</h3>
                  <p className="text-sm text-slate-500 mt-1">
-                    Upload an Excel or CSV file. The importer will look for columns named "Name", "Date", "Number", "FEEDBACK", and "Remark".
-                </p>
-                <p className="text-xs text-slate-500 mt-2">
-                    The "FEEDBACK" column maps to the FEEDBACK field, and "Remark" maps to Notes. If required info is missing, you'll be prompted to fix it.
+                    Upload an Excel or CSV file to add bulk records.
                 </p>
             </div>
 
@@ -97,7 +112,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ onFileImport, isImporti
                 onClick={handleDownloadTemplate}
                 className="w-full flex justify-center items-center gap-2 py-2 px-4 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors"
             >
-                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" /></svg>
                 Download Template
             </button>
 

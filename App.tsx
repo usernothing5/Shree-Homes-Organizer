@@ -32,14 +32,15 @@ const FirebaseConfigMessage: React.FC = () => (
             </ol>
         </div>
         <div className="border-t border-slate-300 pt-4">
-            <h2 className="font-bold text-slate-700 text-lg">Step 2: Enable Email Sign-In</h2>
+            <h2 className="font-bold text-slate-700 text-lg">Step 2: Enable Authentication Providers</h2>
              <p className="text-slate-600 mt-2">
-                For sign-up and sign-in to work, you <span className="font-bold uppercase text-red-600">must</span> enable the Email/Password provider in Firebase.
+                To allow users to sign in, you <span className="font-bold uppercase text-red-600">must</span> enable the sign-in methods in Firebase.
             </p>
             <ol className="list-decimal list-inside mt-2 space-y-2 text-slate-600">
                 <li>Go to the <span className="font-semibold">Firebase Console</span>.</li>
                 <li>Navigate to <span className="font-semibold">Authentication</span> {'>'} <span className="font-semibold">Sign-in method</span>.</li>
-                <li>Find <span className="font-semibold">Email/Password</span> in the provider list and enable it.</li>
+                <li>Enable <span className="font-semibold">Email/Password</span>.</li>
+                <li>To use Google Sign-In, click <span className="font-semibold">Add new provider</span>, select <span className="font-semibold">Google</span>, and enable it.</li>
             </ol>
         </div>
       </div>
@@ -62,38 +63,40 @@ const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
 
 
 const App: React.FC = () => {
-  if (!isConfigured) {
-    return <FirebaseConfigMessage />;
-  }
-
-  const { user, loading, signIn, signUp, signOut } = useAuth();
+  // Hooks must be called at the top level
+  const { user, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth();
   const [firestoreError, setFirestoreError] = useState(false);
   const [checkingFirestore, setCheckingFirestore] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      setCheckingFirestore(true);
-      setFirestoreError(false);
-      // Test Firestore rules by attempting to read a user-specific collection.
-      const testCollection = collection(db, `users/${user.uid}/projects`);
-      getDocs(testCollection).then(() => {
-        // Success! Rules are permissive enough.
-        setCheckingFirestore(false);
-      }).catch(error => {
-        if (error.code === 'permission-denied') {
-          // This is the most likely error if rules aren't set up.
-          setFirestoreError(true);
-        }
-        console.error("Firestore access error:", error);
-        setCheckingFirestore(false);
-      });
-    } else {
-      // If there's no user, no need to check Firestore.
+    if (!isConfigured || !user || !db) {
       setCheckingFirestore(false);
       setFirestoreError(false);
+      return;
     }
+
+    setCheckingFirestore(true);
+    setFirestoreError(false);
+    
+    // Test Firestore rules by attempting to read a user-specific collection.
+    const testCollection = collection(db, `users/${user.uid}/projects`);
+    getDocs(testCollection).then(() => {
+      // Success! Rules are permissive enough.
+      setCheckingFirestore(false);
+    }).catch(error => {
+      if (error.code === 'permission-denied') {
+        // This is the most likely error if rules aren't set up.
+        setFirestoreError(true);
+      }
+      console.error("Firestore access error:", error);
+      setCheckingFirestore(false);
+    });
   }, [user]);
   
+  if (!isConfigured) {
+    return <FirebaseConfigMessage />;
+  }
+
   if (loading) {
     return <LoadingScreen message="Initializing authentication..." />;
   }
@@ -103,7 +106,7 @@ const App: React.FC = () => {
   }
 
   if (!user) {
-    return <AuthPage onSignIn={signIn} onSignUp={signUp} />;
+    return <AuthPage onSignIn={signIn} onSignUp={signUp} onSignInWithGoogle={signInWithGoogle} />;
   }
   
   if (firestoreError) {
