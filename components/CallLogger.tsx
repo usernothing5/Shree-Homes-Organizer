@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { CallLog, CallStatus } from '../types';
 
 interface CallLoggerProps {
-  addCallLog: (log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'>) => void;
+  addCallLog: (log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'>) => Promise<void>;
+  isReady: boolean;
 }
 
 const getInitialIndianDateTime = () => {
@@ -40,7 +41,7 @@ const getInitialIndianDateTime = () => {
 };
 
 
-const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
+const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady }) => {
   const [callerName, setCallerName] = useState(() => localStorage.getItem('callerName') || '');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -51,6 +52,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
   const [callbackPeriod, setCallbackPeriod] = useState<'AM' | 'PM'>('AM');
   const [notes, setNotes] = useState('');
   const [visitWon, setVisitWon] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('callerName', callerName);
@@ -69,8 +71,12 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
   }, [status, callbackDate]);
 
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isReady) {
+        alert("System is not ready. Please wait for the project to load.");
+        return;
+    }
     if (!callerName.trim()) {
       alert('Please enter the caller name.');
       return;
@@ -79,6 +85,8 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
       alert('Please enter a client name.');
       return;
     }
+
+    setIsSaving(true);
 
     const log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'> = {
       callerName: callerName.trim(),
@@ -112,16 +120,24 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
       }
     }
 
-    addCallLog(log);
-    setClientName('');
-    setClientPhone('');
-    setStatus(CallStatus.Interested);
-    setCallbackDate('');
-    setCallbackHour('');
-    setCallbackMinute('');
-    setCallbackPeriod('AM');
-    setNotes('');
-    setVisitWon(false);
+    try {
+        await addCallLog(log);
+        // Only clear form if successful
+        setClientName('');
+        setClientPhone('');
+        setStatus(CallStatus.Interested);
+        setCallbackDate('');
+        setCallbackHour('');
+        setCallbackMinute('');
+        setCallbackPeriod('AM');
+        setNotes('');
+        setVisitWon(false);
+    } catch (error: any) {
+        console.error("Error saving log:", error);
+        alert(`Failed to save call log: ${error.message || "Unknown error"}. Please check your internet connection and permissions.`);
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
@@ -267,9 +283,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog }) => {
         </div>
         <button
           type="submit"
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors"
+          disabled={isSaving || !isReady}
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
         >
-          Save Call Log
+          {isSaving ? 'Saving...' : (!isReady ? 'Loading Project...' : 'Save Call Log')}
         </button>
       </form>
     </div>

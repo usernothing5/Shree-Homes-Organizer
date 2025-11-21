@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import CrmApp from './CrmApp';
 import { isConfigured, db } from './firebase';
@@ -78,12 +79,20 @@ const App: React.FC = () => {
     setCheckingFirestore(true);
     setFirestoreError(false);
     
+    // Set a timeout so we don't block the user indefinitely if verification hangs (e.g. network issues)
+    const timeoutId = setTimeout(() => {
+        console.warn("Firestore verification timed out. Proceeding anyway.");
+        setCheckingFirestore(false);
+    }, 5000);
+
     // Test Firestore rules by attempting to read a user-specific collection.
     const testCollection = collection(db, `users/${user.uid}/projects`);
     getDocs(testCollection).then(() => {
       // Success! Rules are permissive enough.
+      clearTimeout(timeoutId);
       setCheckingFirestore(false);
     }).catch(error => {
+      clearTimeout(timeoutId);
       if (error.code === 'permission-denied') {
         // This is the most likely error if rules aren't set up.
         setFirestoreError(true);
@@ -91,6 +100,8 @@ const App: React.FC = () => {
       console.error("Firestore access error:", error);
       setCheckingFirestore(false);
     });
+    
+    return () => clearTimeout(timeoutId);
   }, [user]);
   
   if (!isConfigured) {

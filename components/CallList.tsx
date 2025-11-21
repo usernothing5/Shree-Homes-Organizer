@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo } from 'react';
 import { CallLog, CallStatus } from '../types';
 
@@ -178,6 +179,11 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
   
   const todaysLogs = useMemo(() => filteredLogs.filter(log => isToday(new Date(log.timestamp))), [filteredLogs]);
 
+  const hasHistory = useMemo(() => {
+      const todayString = new Date().toISOString().split('T')[0];
+      return callLogs.some(log => log.timestamp.split('T')[0] !== todayString);
+  }, [callLogs]);
+
   const historicalLogsByDate = useMemo(() => {
     const groups: { [key: string]: CallLog[] } = {};
     const todayString = new Date().toISOString().split('T')[0];
@@ -267,8 +273,13 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="mt-2 text-sm text-slate-500">
-                {searchQuery ? `No logs found matching "${searchQuery}".` : 'No calls logged for today yet.'}
+                {searchQuery ? `No logs found matching "${searchQuery}".` : 'No calls logged for today.'}
               </p>
+              {!searchQuery && hasHistory && (
+                 <button onClick={() => setView('history')} className="mt-4 text-sky-600 hover:underline text-sm font-medium">
+                     View Past Logs in History
+                 </button>
+              )}
             </div>
           )
         )}

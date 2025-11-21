@@ -54,11 +54,13 @@ interface CrmAppProps {
 
 const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  // Initialize activeProjectId from localStorage to remember user's last choice
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => localStorage.getItem(`lastActiveProjectId_${user.uid}`));
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [statOverrides, setStatOverrides] = useState<StatOverrides>({});
 
   const [isLoading, setIsLoading] = useState(true);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
   
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
@@ -71,36 +73,63 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
   const [logsForReview, setLogsForReview] = useState<IncompleteLog[] | null>(null);
 
+  // Save active project selection whenever it changes
+  useEffect(() => {
+    if (activeProjectId) {
+      localStorage.setItem(`lastActiveProjectId_${user.uid}`, activeProjectId);
+    }
+  }, [activeProjectId, user.uid]);
+
   // --- Firestore Data Fetching ---
   useEffect(() => {
     if (!user) return;
     setIsLoading(true);
+    setPermissionError(null);
     const projectsCol = collection(db, `users/${user.uid}/projects`);
     const projectsQuery = query(projectsCol);
 
     const unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
       const fetchedProjects: Project[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Project));
+      
+      // IMPORTANT: Sort projects deterministically (by name, then ID).
+      // This prevents "Device A" and "Device B" from auto-selecting different "Default Projects" if duplicates exist.
+      fetchedProjects.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      
       setProjects(fetchedProjects);
 
       if (fetchedProjects.length > 0) {
+        // If we don't have an active project, OR the one we have doesn't exist anymore (deleted), pick the first one.
+        // We also check localStorage via the initial state, but we must validate it exists in the fetched list.
         if (!activeProjectId || !fetchedProjects.some(p => p.id === activeProjectId)) {
-            setActiveProjectId(fetchedProjects[0].id);
+            const savedId = localStorage.getItem(`lastActiveProjectId_${user.uid}`);
+            const validSavedProject = fetchedProjects.find(p => p.id === savedId);
+            setActiveProjectId(validSavedProject ? validSavedProject.id : fetchedProjects[0].id);
         }
       } else {
         // If no projects, create a default one
         const defaultProject: Omit<Project, 'id'> = { name: 'Default Project' };
         addDoc(projectsCol, defaultProject).then(docRef => {
             setActiveProjectId(docRef.id);
+        }).catch(err => {
+            console.error("Error creating default project:", err);
+            if (err.code === 'permission-denied') {
+                setPermissionError("Write permission denied. Please update your Firestore Security Rules in the Firebase Console.");
+            } else {
+                setPermissionError(`Could not initialize project: ${err.message}`);
+            }
         });
       }
       setIsLoading(false);
     }, (error) => {
         console.error("Error fetching projects:", error);
+        if (error.code === 'permission-denied') {
+             setPermissionError("Read permission denied. Please update your Firestore Security Rules.");
+        }
         setIsLoading(false);
     });
 
     return () => unsubscribeProjects();
-  }, [user]);
+  }, [user]); // activeProjectId excluded to prevent loop, we manage it inside
 
   useEffect(() => {
     if (!user || !activeProjectId) return;
@@ -401,7 +430,9 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
 
   // --- Data Modification Functions ---
   const addCallLog = useCallback(async (log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'>) => {
-    if (!activeProjectId || !user) return;
+    if (!activeProjectId || !user) {
+        throw new Error("No active project or user. Cannot save log.");
+    }
     const newLog: Omit<CallLog, 'id'> = {
       ...log,
       timestamp: new Date().toISOString(),
@@ -498,6 +529,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       // Switch to another project
       if (id === activeProjectId) {
         const remainingProjects = projects.filter(p => p.id !== id);
+        // Sort remaining to be safe
+        remainingProjects.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
         setActiveProjectId(remainingProjects[0]?.id || null);
       }
     }
@@ -581,13 +614,29 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           onSignOut={onSignOut}
           userEmail={user.email}
         />
+        
+        {permissionError && (
+            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 mx-4 sm:mx-6 lg:mx-8 mt-4 shadow-md rounded-r">
+                <p className="font-bold">System Error</p>
+                <p>{permissionError}</p>
+            </div>
+        )}
+
         <main className="p-4 sm:p-6 lg:p-8">
           {isLoading ? (
-             <div className="flex items-center justify-center"><p>Loading project data...</p></div>
+             <div className="flex items-center justify-center h-64">
+                <div className="flex flex-col items-center gap-2">
+                    <svg className="animate-spin h-8 w-8 text-sky-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-slate-500">Loading project data...</p>
+                </div>
+             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
               <div className="lg:col-span-1 space-y-6">
-                <CallLogger addCallLog={addCallLog} />
+                <CallLogger addCallLog={addCallLog} isReady={!!activeProjectId} />
                 <Stats callLogs={callLogs} />
                 <CallerPerformance 
                   todaysLogs={callLogs.filter(log => new Date(log.timestamp).toDateString() === new Date().toDateString())}
