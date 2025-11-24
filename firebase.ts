@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -30,10 +30,19 @@ if (isConfigured) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     
-    // Use standard Firestore instance to ensure real-time consistency across devices.
-    // We disable offline persistence to prevent stale cache issues where the phone 
-    // might show old data instead of what was just added on the PC.
     db = getFirestore(app);
+
+    // Enable offline persistence.
+    // This is critical for "instant" saving. It writes to the local database immediately
+    // so the user doesn't have to wait for a network round-trip. 
+    // The SDK handles syncing to the cloud in the background.
+    enableIndexedDbPersistence(db).catch((err) => {
+        if (err.code == 'failed-precondition') {
+            console.warn("Persistence failed: Multiple tabs open. Persistence can only be enabled in one tab at a time.");
+        } else if (err.code == 'unimplemented') {
+            console.warn("Persistence is not available in this browser.");
+        }
+    });
     
   } catch (error) {
     console.error("Firebase initialization error:", error);
