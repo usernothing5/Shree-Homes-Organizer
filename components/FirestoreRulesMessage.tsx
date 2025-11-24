@@ -1,11 +1,13 @@
+
 import React from 'react';
 
 const rulesToCopy = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read and write their own data
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Allow any authenticated user to read and write all data
+    // This enables sharing data across all devices/callers in your organization.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }`;
@@ -26,17 +28,17 @@ const FirestoreRulesMessage: React.FC = () => {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-amber-500 mx-auto mb-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
             </svg>
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">IMPORTANT: Data Syncing Disabled</h1>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">IMPORTANT: Update Security Rules</h1>
             <p className="text-slate-600 mb-6 text-lg">
-                The app has connected to Firebase, but it cannot save or load your data. This is likely because your Firestore Security Rules are blocking access.
+                To enable data syncing between you and your callers, you must update your Firestore Security Rules to allow shared access.
             </p>
             <div className="text-left bg-slate-50 p-6 rounded-md border border-slate-200 space-y-4">
                 <div>
-                    <h2 className="font-bold text-slate-700 text-lg">Solution: Update Security Rules</h2>
+                    <h2 className="font-bold text-slate-700 text-lg">Solution: Allow Shared Access</h2>
                     <ol className="list-decimal list-inside mt-2 space-y-2 text-slate-600">
                         <li>Go to your <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline font-semibold">Firebase Console</a>.</li>
                         <li>Navigate to <span className="font-semibold">Firestore Database</span> {'>'} <span className="font-semibold">Rules</span> tab.</li>
-                        <li>Replace the existing rules with the code below. This allows authenticated users to access their own data securely.</li>
+                        <li>Replace the existing rules with the code below. This allows any signed-in user to access the shared company data.</li>
                     </ol>
                 </div>
                 <div className="bg-slate-800 text-white p-4 rounded-md font-mono text-sm overflow-x-auto relative group">

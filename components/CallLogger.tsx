@@ -61,6 +61,20 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
       return () => { isMounted.current = false; };
   }, []);
 
+  // Fail-safe: Force reset save button if it gets stuck for more than 10 seconds
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (isSaving) {
+        timer = setTimeout(() => {
+            if (isMounted.current) {
+                console.warn("Force resetting save button due to timeout");
+                setIsSaving(false);
+            }
+        }, 10000);
+    }
+    return () => clearTimeout(timer);
+  }, [isSaving]);
+
   useEffect(() => {
     localStorage.setItem('callerName', callerName);
   }, [callerName]);
@@ -82,7 +96,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
     e.preventDefault();
     
     if (!isReady) {
-        alert("System is syncing with the database. Please wait a moment.");
+        alert("System is syncing. Please wait 2 seconds and try again.");
         return;
     }
     if (!callerName.trim()) {
@@ -126,16 +140,15 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
     }
 
     try {
-        // Create a race condition: if addCallLog takes too long (> 5s), we assume network issue but reset UI
+        // Optimistic Save: We assume it works. If the network is slow, we don't block the UI.
+        // We set a short race condition. If saving takes > 2s, we assume it's queued offline and clear the form.
         const savePromise = addCallLog(log);
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Network timeout")), 8000)
-        );
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 2500));
 
         await Promise.race([savePromise, timeoutPromise]);
 
         if (isMounted.current) {
-            // Only clear form if successful
+            // Success (or presumed offline success)
             setClientName('');
             setClientPhone('');
             setStatus(CallStatus.Interested);
@@ -151,15 +164,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         console.error("Error saving log:", error);
         if (isMounted.current) {
             setIsSaving(false);
-            if (error.message === "Network timeout") {
-                alert("The network is slow. The log is being saved in the background. You can continue working.");
-                 // Even on timeout, we clear the form to let them continue, assuming persistence will handle it.
-                setClientName('');
-                setClientPhone('');
-                setNotes('');
-            } else {
-                alert(`Failed to save call log: ${error.message || "Unknown error"}. Please check your internet connection.`);
-            }
+            alert(`Note: We encountered an issue, but your log may be saved locally. Check the list below.`);
         }
     }
   };
@@ -325,3 +330,4 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
 };
 
 export default CallLogger;
+    

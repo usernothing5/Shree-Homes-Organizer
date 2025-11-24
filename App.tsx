@@ -85,8 +85,9 @@ const App: React.FC = () => {
         setCheckingFirestore(false);
     }, 5000);
 
-    // Test Firestore rules by attempting to read a user-specific collection.
-    const testCollection = collection(db, `users/${user.uid}/projects`);
+    // Test Firestore rules by attempting to read the shared projects collection.
+    // We check 'projects' at the root level because data is shared.
+    const testCollection = collection(db, 'projects');
     getDocs(testCollection).then(() => {
       // Success! Rules are permissive enough.
       clearTimeout(timeoutId);
