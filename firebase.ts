@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -32,11 +32,10 @@ if (isConfigured) {
     
     db = getFirestore(app);
 
-    // Enable offline persistence.
-    // This is critical for "instant" saving. It writes to the local database immediately
-    // so the user doesn't have to wait for a network round-trip. 
-    // The SDK handles syncing to the cloud in the background.
-    enableIndexedDbPersistence(db).catch((err) => {
+    // Enable Multi-Tab Offline Persistence.
+    // This allows the app to work offline and sync when online, even if multiple tabs are open.
+    // It also makes saving "instant" because it writes to the local cache immediately.
+    enableMultiTabIndexedDbPersistence(db).catch((err) => {
         if (err.code == 'failed-precondition') {
             console.warn("Persistence failed: Multiple tabs open. Persistence can only be enabled in one tab at a time.");
         } else if (err.code == 'unimplemented') {

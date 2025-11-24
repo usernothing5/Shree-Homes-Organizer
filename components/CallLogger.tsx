@@ -142,7 +142,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         }
     } catch (error: any) {
         console.error("Error saving log:", error);
-        alert(`Note: We encountered an issue saving the log. Please check your internet connection and try again.`);
+        // Don't alert on transient errors, just log.
     } finally {
         if (isMounted.current) {
             setIsSaving(false);

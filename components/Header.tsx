@@ -69,7 +69,7 @@ const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1.5 mt-0.5">
                 <span className={`inline-block h-2 w-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></span>
                 <span className="text-xs text-slate-300 font-medium uppercase tracking-wide">
-                    {isOnline ? 'Online' : 'Offline Mode'}
+                    {isOnline ? 'Online' : 'Offline'}
                 </span>
             </div>
           </div>
