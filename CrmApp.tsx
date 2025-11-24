@@ -13,7 +13,6 @@ import {
   where,
   getDocs,
   Timestamp,
-  setDoc,
 } from 'firebase/firestore';
 import { CallLog, CallStatus, Project, IncompleteLog, CallerStats, User } from './types';
 import Header from './components/Header';
@@ -52,13 +51,15 @@ interface CrmAppProps {
   onSignOut: () => void;
 }
 
+const STORAGE_KEY_PROJECT = 'shree_homes_active_project';
+
 const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [statOverrides, setStatOverrides] = useState<StatOverrides>({});
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   
   const [activeCallback, setActiveCallback] = useState<CallLog | null>(null);
@@ -72,12 +73,30 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
   const [logsForReview, setLogsForReview] = useState<IncompleteLog[] | null>(null);
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // --- Firestore Data Fetching ---
+
+  // 1. Fetch Projects (Independent of active selection)
   useEffect(() => {
     if (!user) return;
-    setIsLoading(true);
+    setIsProjectsLoading(true);
     setPermissionError(null);
-    // Changed to root 'projects' collection for shared access
+    
+    // Use root-level 'projects' collection for global sync
     const projectsCol = collection(db, 'projects');
     const projectsQuery = query(projectsCol);
 
@@ -93,44 +112,65 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       });
       
       setProjects(fetchedProjects);
-
-      if (fetchedProjects.length > 0) {
-        // If no active project selected, or current one deleted, default to top.
-        if (!activeProjectId || !fetchedProjects.some(p => p.id === activeProjectId)) {
-             setActiveProjectId(fetchedProjects[0].id);
-        }
-      } else {
-        const defaultProject: Omit<Project, 'id'> = { 
-            name: 'Default Project',
-            lastUpdated: new Date().toISOString()
-        };
-        addDoc(projectsCol, defaultProject).then(docRef => {
-            setActiveProjectId(docRef.id);
-        }).catch(err => {
-            console.error("Error creating default project:", err);
-            if (err.code === 'permission-denied') {
-                setPermissionError("Write permission denied. Please update your Firestore Security Rules in the Firebase Console.");
-            } else {
-                setPermissionError(`Could not initialize project: ${err.message}`);
-            }
-        });
-      }
-      setIsLoading(false);
+      setIsProjectsLoading(false);
     }, (error) => {
         console.error("Error fetching projects:", error);
         if (error.code === 'permission-denied') {
              setPermissionError("Read permission denied. Please update your Firestore Security Rules.");
         }
-        setIsLoading(false);
+        setIsProjectsLoading(false);
     });
 
     return () => unsubscribeProjects();
-  }, [user, activeProjectId]);
+  }, [user]);
 
+  // 2. Manage Active Project Selection & Persistence
   useEffect(() => {
-    if (!user || !activeProjectId) return;
+    const storedProjId = localStorage.getItem(STORAGE_KEY_PROJECT);
+
+    if (projects.length > 0) {
+        // If we have a stored ID and it exists in the fetched projects, use it.
+        if (storedProjId && projects.some(p => p.id === storedProjId)) {
+            if (activeProjectId !== storedProjId) {
+                setActiveProjectId(storedProjId);
+            }
+        } 
+        // If no stored ID or invalid, fallback to the most recently updated project (index 0).
+        else if (!activeProjectId || !projects.some(p => p.id === activeProjectId)) {
+             setActiveProjectId(projects[0].id);
+             localStorage.setItem(STORAGE_KEY_PROJECT, projects[0].id);
+        }
+    } else if (!isProjectsLoading && projects.length === 0) {
+        // Create default only if projects are fully loaded and empty
+        const createDefault = async () => {
+            try {
+                // Double-check emptiness before creating
+                const snap = await getDocs(collection(db, 'projects'));
+                if (snap.empty) {
+                    const defaultProject = { 
+                        name: 'My Project',
+                        lastUpdated: new Date().toISOString()
+                    };
+                    await addDoc(collection(db, 'projects'), defaultProject);
+                }
+            } catch (err: any) {
+                console.error("Error creating default project:", err);
+            }
+        };
+        createDefault();
+    }
+  }, [projects, isProjectsLoading, activeProjectId]);
+
+  // 3. Fetch Call Logs (Dependent on Active Project)
+  useEffect(() => {
+    if (!user || !activeProjectId) {
+        if (!activeProjectId) setCallLogs([]);
+        return;
+    }
     
-    // Changed to root 'callLogs' collection for shared access
+    // Use root-level 'callLogs' collection
+    // Note: We are relying on client-side sorting for optimal initial load speed
+    // combined with Firestore Persistence for offline support.
     const logsCol = collection(db, 'callLogs');
     const logsQuery = query(logsCol, where("projectId", "==", activeProjectId));
     
@@ -142,11 +182,11 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
             callbackTime: (d.data().callbackTime as Timestamp)?.toDate().toISOString()
         } as CallLog));
         
+        // Client-side sort is fast for <5000 records and avoids composite index requirement errors
         fetchedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setCallLogs(fetchedLogs);
     });
 
-    // Changed to root 'statOverrides' collection for shared access
     const overridesDoc = doc(db, 'statOverrides', activeProjectId);
     const unsubscribeOverrides = onSnapshot(overridesDoc, (snapshot) => {
         if(snapshot.exists()) {
@@ -164,25 +204,21 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
 
   const activeProject = useMemo(() => projects.find(p => p.id === activeProjectId), [projects, activeProjectId]);
 
-  // Check if there is a newer project available that isn't the current one.
-  // This indicates sync activity on another device on a different project.
   const hasNewerData = useMemo(() => {
       if (projects.length > 0 && activeProjectId) {
-          // Since projects is sorted by lastUpdated descending, projects[0] is the newest.
-          // If the newest project is not the one we are looking at, alert the user.
+          // If the first project in the list (sorted by recency) is NOT the active one,
+          // it means another device updated a different project.
           return projects[0].id !== activeProjectId;
       }
       return false;
   }, [projects, activeProjectId]);
 
-  // --- Helper to touch project timestamp ---
-  // We fire and forget this to not block UI.
   const touchProjectTimestamp = async () => {
       if (!user || !activeProjectId) return;
       const projectRef = doc(db, 'projects', activeProjectId);
-      // We don't await this because if it fails or lags (e.g. offline), we don't want to stop the user.
+      // Fire and forget, don't await to keep UI snappy
       updateDoc(projectRef, { lastUpdated: new Date().toISOString() }).catch(err => {
-          console.warn("Background sync of project timestamp failed (likely offline):", err);
+          console.warn("Background sync of project timestamp failed:", err);
       });
   };
 
@@ -458,8 +494,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         ...(newLog.callbackTime && { callbackTime: Timestamp.fromDate(new Date(newLog.callbackTime)) })
     });
     
-    // Secondary action: Touch the timestamp. 
-    // We do NOT await this in the critical path to avoid UI hanging if project doc is locked or net is slow.
+    // Secondary action: Touch the timestamp to notify others
     touchProjectTimestamp();
 
   }, [user, activeProjectId]);
@@ -525,6 +560,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     };
     const docRef = await addDoc(collection(db, 'projects'), newProject);
     setActiveProjectId(docRef.id);
+    localStorage.setItem(STORAGE_KEY_PROJECT, docRef.id);
   };
 
   const handleDeleteProject = async (id: string) => {
@@ -543,9 +579,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           batch.delete(logDoc.ref);
       });
       await batch.commit();
-      
-      // No need to manually switch project; the snapshot listener will detect deletion 
-      // and the effect hook will auto-select the next available project.
     }
   };
 
@@ -553,8 +586,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     if (id !== activeProjectId) {
       setCallLogs([]);
       setActiveProjectId(id);
+      localStorage.setItem(STORAGE_KEY_PROJECT, id);
       setActiveCallback(null);
-      // We also touch the project here to indicate it is now "active" and float it to top for others
       if(user) {
            const projectRef = doc(db, 'projects', id);
            updateDoc(projectRef, { lastUpdated: new Date().toISOString() }).catch(console.warn);
@@ -640,6 +673,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           userEmail={user.email}
           hasNewerData={hasNewerData}
           onSyncNewest={handleSyncNewest}
+          isOnline={isOnline}
         />
         
         {permissionError && (
@@ -650,17 +684,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         )}
 
         <main className="p-4 sm:p-6 lg:p-8">
-          {isLoading ? (
-             <div className="flex items-center justify-center h-64">
-                <div className="flex flex-col items-center gap-2">
-                    <svg className="animate-spin h-8 w-8 text-sky-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p className="text-slate-500">Loading project data...</p>
-                </div>
-             </div>
-          ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
               <div className="lg:col-span-1 space-y-6">
                 <CallLogger 
@@ -695,7 +718,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
                 />
               </div>
             </div>
-          )}
         </main>
       </div>
     </div>

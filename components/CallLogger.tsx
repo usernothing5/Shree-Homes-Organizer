@@ -61,20 +61,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
       return () => { isMounted.current = false; };
   }, []);
 
-  // Fail-safe: Force reset save button if it gets stuck for more than 10 seconds
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    if (isSaving) {
-        timer = setTimeout(() => {
-            if (isMounted.current) {
-                console.warn("Force resetting save button due to timeout");
-                setIsSaving(false);
-            }
-        }, 10000);
-    }
-    return () => clearTimeout(timer);
-  }, [isSaving]);
-
   useEffect(() => {
     localStorage.setItem('callerName', callerName);
   }, [callerName]);
@@ -96,7 +82,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
     e.preventDefault();
     
     if (!isReady) {
-        alert("System is syncing. Please wait 2 seconds and try again.");
+        // Silently return if not ready, UI is already disabled
         return;
     }
     if (!callerName.trim()) {
@@ -140,15 +126,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
     }
 
     try {
-        // Optimistic Save: We assume it works. If the network is slow, we don't block the UI.
-        // We set a short race condition. If saving takes > 2s, we assume it's queued offline and clear the form.
-        const savePromise = addCallLog(log);
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 2500));
-
-        await Promise.race([savePromise, timeoutPromise]);
-
+        await addCallLog(log);
+        
         if (isMounted.current) {
-            // Success (or presumed offline success)
+            // Success
             setClientName('');
             setClientPhone('');
             setStatus(CallStatus.Interested);
@@ -158,13 +139,13 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
             setCallbackPeriod('AM');
             setNotes('');
             setVisitWon(false);
-            setIsSaving(false);
         }
     } catch (error: any) {
         console.error("Error saving log:", error);
+        alert(`Note: We encountered an issue saving the log. Please check your internet connection and try again.`);
+    } finally {
         if (isMounted.current) {
             setIsSaving(false);
-            alert(`Note: We encountered an issue, but your log may be saved locally. Check the list below.`);
         }
     }
   };
@@ -319,10 +300,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         </div>
         <button
           type="submit"
-          disabled={isSaving}
+          disabled={isSaving || !isReady}
           className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
         >
-          {isSaving ? 'Saving...' : (!isReady ? 'Loading... Please Wait' : 'Save Call Log')}
+          {isSaving ? 'Saving...' : (!isReady ? 'Initializing...' : 'Save Call Log')}
         </button>
       </form>
     </div>
@@ -330,4 +311,3 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
 };
 
 export default CallLogger;
-    

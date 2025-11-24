@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -22,26 +22,19 @@ let db: any;
 export const isConfigured = 
   firebaseConfig.apiKey && 
   !firebaseConfig.apiKey.includes("YOUR_") &&
-  firebaseConfig.projectId &&
+  firebaseConfig.projectId && 
   !firebaseConfig.projectId.includes("YOUR_");
 
 if (isConfigured) {
   try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
+    
+    // Use standard Firestore instance to ensure real-time consistency across devices.
+    // We disable offline persistence to prevent stale cache issues where the phone 
+    // might show old data instead of what was just added on the PC.
     db = getFirestore(app);
     
-    // Enable offline persistence
-    enableIndexedDbPersistence(db).catch((err) => {
-        if (err.code == 'failed-precondition') {
-            // Multiple tabs open, persistence can only be enabled in one tab at a a time.
-            console.warn("Firebase persistence failed: Multiple tabs open");
-        } else if (err.code == 'unimplemented') {
-            // The current browser does not support all of the features required to enable persistence
-            console.warn("Firebase persistence not supported by browser");
-        }
-    });
-
   } catch (error) {
     console.error("Firebase initialization error:", error);
   }

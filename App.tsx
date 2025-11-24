@@ -4,8 +4,6 @@ import CrmApp from './CrmApp';
 import { isConfigured, db } from './firebase';
 import { useAuth } from './hooks/useAuth';
 import AuthPage from './components/AuthPage';
-import { collection, getDocs } from 'firebase/firestore';
-import FirestoreRulesMessage from './components/FirestoreRulesMessage';
 
 const FirebaseConfigMessage: React.FC = () => (
   <div className="flex items-center justify-center min-h-screen bg-red-50 p-4">
@@ -66,45 +64,7 @@ const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
 const App: React.FC = () => {
   // Hooks must be called at the top level
   const { user, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth();
-  const [firestoreError, setFirestoreError] = useState(false);
-  const [checkingFirestore, setCheckingFirestore] = useState(true);
 
-  useEffect(() => {
-    if (!isConfigured || !user || !db) {
-      setCheckingFirestore(false);
-      setFirestoreError(false);
-      return;
-    }
-
-    setCheckingFirestore(true);
-    setFirestoreError(false);
-    
-    // Set a timeout so we don't block the user indefinitely if verification hangs (e.g. network issues)
-    const timeoutId = setTimeout(() => {
-        console.warn("Firestore verification timed out. Proceeding anyway.");
-        setCheckingFirestore(false);
-    }, 5000);
-
-    // Test Firestore rules by attempting to read the shared projects collection.
-    // We check 'projects' at the root level because data is shared.
-    const testCollection = collection(db, 'projects');
-    getDocs(testCollection).then(() => {
-      // Success! Rules are permissive enough.
-      clearTimeout(timeoutId);
-      setCheckingFirestore(false);
-    }).catch(error => {
-      clearTimeout(timeoutId);
-      if (error.code === 'permission-denied') {
-        // This is the most likely error if rules aren't set up.
-        setFirestoreError(true);
-      }
-      console.error("Firestore access error:", error);
-      setCheckingFirestore(false);
-    });
-    
-    return () => clearTimeout(timeoutId);
-  }, [user]);
-  
   if (!isConfigured) {
     return <FirebaseConfigMessage />;
   }
@@ -113,18 +73,13 @@ const App: React.FC = () => {
     return <LoadingScreen message="Initializing authentication..." />;
   }
 
-  if (user && checkingFirestore) {
-    return <LoadingScreen message="Verifying data store access..." />;
-  }
-
   if (!user) {
     return <AuthPage onSignIn={signIn} onSignUp={signUp} onSignInWithGoogle={signInWithGoogle} />;
   }
   
-  if (firestoreError) {
-    return <FirestoreRulesMessage />;
-  }
-
+  // Directly render CRM App if authenticated. 
+  // We rely on the internal Firestore listeners to handle data connection state,
+  // preventing the "slow load" feeling of a blocking check.
   return <CrmApp user={user} onSignOut={signOut} />;
 };
 

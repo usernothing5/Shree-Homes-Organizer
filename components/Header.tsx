@@ -11,6 +11,7 @@ interface HeaderProps {
   userEmail: string | null;
   hasNewerData?: boolean;
   onSyncNewest?: () => void;
+  isOnline: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -21,7 +22,8 @@ const Header: React.FC<HeaderProps> = ({
     onSignOut, 
     userEmail,
     hasNewerData,
-    onSyncNewest
+    onSyncNewest,
+    isOnline
 }) => {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -56,13 +58,21 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-slate-800 shadow-md">
+    <header className="bg-slate-800 shadow-md transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-sky-400 mr-3" viewBox="0 0 20 20" fill="currentColor">
             <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
           </svg>
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Shree Homes Organizer</h1>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-none">Shree Homes</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+                <span className={`inline-block h-2 w-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></span>
+                <span className="text-xs text-slate-300 font-medium uppercase tracking-wide">
+                    {isOnline ? 'Online' : 'Offline Mode'}
+                </span>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 sm:gap-4 ml-auto">
@@ -82,7 +92,7 @@ const Header: React.FC<HeaderProps> = ({
           <div className="relative" ref={projectDropdownRef}>
             <button 
               onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-              className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-medium py-1.5 px-3 sm:py-2 sm:px-4 rounded-md transition-colors text-sm sm:text-base max-w-[160px] sm:max-w-none"
+              className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-medium py-1.5 px-3 sm:py-2 sm:px-4 rounded-md transition-colors text-sm sm:text-base max-w-[160px] sm:max-w-none border border-slate-600"
             >
               <span className="truncate">{activeProject?.name || 'Loading...'}</span>
               <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform ${isProjectDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
