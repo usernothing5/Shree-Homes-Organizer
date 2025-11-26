@@ -54,6 +54,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   const [notes, setNotes] = useState('');
   const [visitWon, setVisitWon] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   
   // Ref to track if component is mounted to prevent state updates on unmount
   const isMounted = useRef(true);
@@ -78,11 +79,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   }, [status, callbackDate]);
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!isReady) {
-        // Silently return if not ready, UI is already disabled
         return;
     }
     if (!callerName.trim()) {
@@ -93,8 +93,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
       alert('Please enter a client name.');
       return;
     }
-
-    setIsSaving(true);
 
     const log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'> = {
       callerName: callerName.trim(),
@@ -125,33 +123,64 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
       }
     }
 
-    try {
-        await addCallLog(log);
+    // --- OPTIMISTIC UPDATE START ---
+    
+    // 1. Immediately block interactions temporarily (briefly)
+    setIsSaving(true);
+
+    // 2. Perform the save in the background
+    addCallLog(log)
+        .catch((error) => {
+            console.error("Error saving log:", error);
+            alert(`Failed to save log for "${log.clientName}". Please try again.`);
+            // Note: We don't restore form state here to keep it simple, 
+            // assuming failure is rare with persistence enabled.
+        });
         
-        if (isMounted.current) {
-            // Success
-            setClientName('');
-            setClientPhone('');
-            setStatus(CallStatus.Interested);
-            setCallbackDate('');
-            setCallbackHour('');
-            setCallbackMinute('');
-            setCallbackPeriod('AM');
-            setNotes('');
-            setVisitWon(false);
-        }
-    } catch (error: any) {
-        console.error("Error saving log:", error);
-        // Don't alert on transient errors, just log.
-    } finally {
+    // 3. Reset form immediately (UI feels instant)
+    setClientName('');
+    setClientPhone('');
+    setStatus(CallStatus.Interested);
+    setCallbackDate('');
+    setCallbackHour('');
+    setCallbackMinute('');
+    setCallbackPeriod('AM');
+    setNotes('');
+    setVisitWon(false);
+
+    // 4. Handle UI feedback asynchronously
+    // Show "Saving..." for a brief moment (500ms) to acknowledge the click
+    setTimeout(() => {
         if (isMounted.current) {
             setIsSaving(false);
+            setSaveMessage('Saved! Ready for next.');
+            
+            // Clear the success message after 3 seconds
+            setTimeout(() => {
+                if (isMounted.current) {
+                    setSaveMessage(null);
+                }
+            }, 3000);
         }
-    }
+    }, 500);
+    // --- OPTIMISTIC UPDATE END ---
   };
 
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
   const minuteOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+  const getButtonText = () => {
+      if (isSaving) return 'Saving...';
+      if (!isReady) return 'Initializing...';
+      if (saveMessage) return saveMessage;
+      return 'Save Call Log';
+  };
+
+  const getButtonColor = () => {
+      if (isSaving) return 'bg-sky-600';
+      if (saveMessage) return 'bg-green-600 hover:bg-green-700';
+      return 'bg-sky-600 hover:bg-sky-700';
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md border-t-4 border-sky-500">
@@ -301,9 +330,9 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         <button
           type="submit"
           disabled={isSaving || !isReady}
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
+          className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 ${getButtonColor()}`}
         >
-          {isSaving ? 'Saving...' : (!isReady ? 'Initializing...' : 'Save Call Log')}
+          {getButtonText()}
         </button>
       </form>
     </div>
