@@ -53,6 +53,17 @@ interface CrmAppProps {
 
 const STORAGE_KEY_PROJECT = 'shree_homes_active_project';
 
+// Robust helper to remove undefined keys which cause Firestore to crash
+const sanitizeFirestoreData = (data: any) => {
+    const clean: any = {};
+    Object.keys(data).forEach(key => {
+        if (data[key] !== undefined) {
+            clean[key] = data[key];
+        }
+    });
+    return clean;
+};
+
 const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -425,7 +436,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         timestamp: Timestamp.fromDate(new Date(log.timestamp)),
         ...(log.callbackTime && { callbackTime: Timestamp.fromDate(new Date(log.callbackTime)) })
       };
-      batch.set(docRef, logWithProject);
+      // Sanitize before adding to batch
+      batch.set(docRef, sanitizeFirestoreData(logWithProject));
     });
 
     const projectRef = doc(db, 'projects', activeProjectId);
@@ -501,12 +513,30 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       isJunk: false,
     };
     
+    // Ensure timestamp is valid before converting to Firestore Timestamp
+    const logDate = new Date(newLog.timestamp);
+    if (isNaN(logDate.getTime())) {
+        throw new Error("Cannot save: Invalid timestamp generated.");
+    }
+
     // Primary action: Save the log
-    await addDoc(collection(db, 'callLogs'), {
+    const dataToSave: any = {
         ...newLog,
-        timestamp: Timestamp.fromDate(new Date(newLog.timestamp)),
-        ...(newLog.callbackTime && { callbackTime: Timestamp.fromDate(new Date(newLog.callbackTime)) })
-    });
+        timestamp: Timestamp.fromDate(logDate),
+    };
+
+    // Safely handle callback time
+    if (newLog.callbackTime) {
+        const cbDate = new Date(newLog.callbackTime);
+        if (!isNaN(cbDate.getTime())) {
+            dataToSave.callbackTime = Timestamp.fromDate(cbDate);
+        } else {
+            console.warn("Skipping invalid callback time:", newLog.callbackTime);
+        }
+    }
+    
+    // Sanitize to remove any undefined fields before saving
+    await addDoc(collection(db, 'callLogs'), sanitizeFirestoreData(dataToSave));
     
     // Secondary action: Touch the timestamp to notify others
     touchProjectTimestamp();
@@ -526,10 +556,20 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     delete finalUpdates.timestamp;
 
     if ('callbackTime' in finalUpdates) {
-      finalUpdates.callbackTime = finalUpdates.callbackTime ? Timestamp.fromDate(new Date(finalUpdates.callbackTime)) : null;
+      if (finalUpdates.callbackTime) {
+          const cbDate = new Date(finalUpdates.callbackTime);
+          if (!isNaN(cbDate.getTime())) {
+             finalUpdates.callbackTime = Timestamp.fromDate(cbDate);
+          } else {
+              delete finalUpdates.callbackTime;
+          }
+      } else {
+          finalUpdates.callbackTime = null; // Explicitly null to clear it
+      }
     }
     
-    await updateDoc(logRef, finalUpdates);
+    // Sanitize updates as well
+    await updateDoc(logRef, sanitizeFirestoreData(finalUpdates));
     touchProjectTimestamp();
     
     setIsResolveModalOpen(false);

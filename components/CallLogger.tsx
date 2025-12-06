@@ -8,7 +8,6 @@ interface CallLoggerProps {
   projectName?: string;
 }
 
-// Updated statuses: Restored NotInterested, Removed Ringing
 const SELECTABLE_STATUSES = [
   CallStatus.Interested,
   CallStatus.DetailsShare,
@@ -30,7 +29,6 @@ const SOURCE_OPTIONS = [
 const getInitialIndianDateTime = () => {
   const now = new Date();
   
-  // Formatter for YYYY-MM-DD format
   const dateFormatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',
@@ -38,10 +36,9 @@ const getInitialIndianDateTime = () => {
     day: '2-digit',
   });
 
-  // Formatter for 12-hour time with AM/PM
   const timeFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata',
-    hour: '2-digit', // '01', '02', ... '12'
+    hour: '2-digit',
     minute: '2-digit',
     hour12: true,
   });
@@ -79,7 +76,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   
-  // Ref to track if component is mounted to prevent state updates on unmount
   const isMounted = useRef(true);
   useEffect(() => {
       return () => { isMounted.current = false; };
@@ -90,7 +86,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   }, [callerName]);
 
   useEffect(() => {
-    // Only auto-fill if status is CallBackLater, otherwise leave blank to be optional
     if (status === CallStatus.CallBackLater) {
       if (!callbackDate) { 
         const { date, hour, minute, period } = getInitialIndianDateTime();
@@ -103,12 +98,11 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   }, [status, callbackDate]);
 
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isReady) {
-        return;
-    }
+    if (!isReady) return;
+
     if (!callerName.trim()) {
       alert('Please enter the caller name.');
       return;
@@ -123,23 +117,26 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         return;
     }
 
-    const log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'> = {
+    // Explicitly construct log object to avoid any 'undefined' values
+    const log: any = {
       callerName: callerName.trim(),
       clientName: clientName.trim(),
-      clientPhone: clientPhone.trim(),
+      clientPhone: clientPhone.trim() || '', // Ensure string
       status,
-      notes: notes.trim(),
+      notes: notes.trim() || '', // Ensure string
       visitWon: false,
       source,
-      sourceDetails: (source === 'Channel Partner' || source === 'Reference') ? sourceDetails.trim() : undefined,
     };
+
+    if ((source === 'Channel Partner' || source === 'Reference') && sourceDetails.trim()) {
+        log.sourceDetails = sourceDetails.trim();
+    }
     
-    // Auto-mark visitWon if the status implies success, or use the toggle
+    // Logic for Visit Won status
     if (status === CallStatus.Interested || status === CallStatus.DetailsShare || status === CallStatus.Booked || status === CallStatus.SiteVisitGenerated || status === CallStatus.SecondSiteVisit) {
         log.visitWon = visitWon;
     }
 
-    // Handle Callback Time logic
     const hasCallbackData = callbackDate && callbackHour && callbackMinute;
     
     if (status === CallStatus.CallBackLater && !hasCallbackData) {
@@ -152,54 +149,52 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         if (callbackPeriod === 'PM' && hour24 < 12) {
           hour24 += 12;
         }
-        if (callbackPeriod === 'AM' && hour24 === 12) { // Midnight case
+        if (callbackPeriod === 'AM' && hour24 === 12) {
           hour24 = 0;
         }
 
-        const [year, month, day] = callbackDate.split('-').map(Number);
-        const combinedDateTime = new Date(year, month - 1, day, hour24, Number(callbackMinute));
-        log.callbackTime = combinedDateTime.toISOString();
+        try {
+            const [year, month, day] = callbackDate.split('-').map(Number);
+            const combinedDateTime = new Date(year, month - 1, day, hour24, Number(callbackMinute));
+            log.callbackTime = combinedDateTime.toISOString();
+        } catch (err) {
+            alert('Invalid date/time provided.');
+            return;
+        }
     }
 
-    // --- OPTIMISTIC UPDATE START ---
-    
-    // 1. Immediately block interactions temporarily (briefly)
     setIsSaving(true);
+    setSaveMessage(null);
 
-    // 2. Perform the save in the background
-    addCallLog(log)
-        .catch((error) => {
-            console.error("Error saving log:", error);
-            alert(`Failed to save log for "${log.clientName}". Please try again.`);
-        });
+    try {
+        await addCallLog(log);
         
-    // 3. Reset form immediately (UI feels instant)
-    setClientName('');
-    setClientPhone('');
-    setStatus(CallStatus.Interested);
-    setCallbackDate('');
-    setCallbackHour('');
-    setCallbackMinute('');
-    setCallbackPeriod('AM');
-    setNotes('');
-    setVisitWon(false);
-    setSource(SOURCE_OPTIONS[0]);
-    setSourceDetails('');
-
-    // 4. Handle UI feedback asynchronously
-    setTimeout(() => {
         if (isMounted.current) {
-            setIsSaving(false);
-            setSaveMessage('Saved! Ready for next.');
+            setClientName('');
+            setClientPhone('');
+            setStatus(CallStatus.Interested);
+            setCallbackDate('');
+            setCallbackHour('');
+            setCallbackMinute('');
+            setCallbackPeriod('AM');
+            setNotes('');
+            setVisitWon(false);
+            setSource(SOURCE_OPTIONS[0]);
+            setSourceDetails('');
             
+            setSaveMessage('Saved successfully!');
             setTimeout(() => {
-                if (isMounted.current) {
-                    setSaveMessage(null);
-                }
+                if (isMounted.current) setSaveMessage(null);
             }, 3000);
         }
-    }, 500);
-    // --- OPTIMISTIC UPDATE END ---
+    } catch (error: any) {
+        console.error("Error saving log:", error);
+        alert(`Failed to save log: ${error.message || 'Unknown error'}`);
+    } finally {
+        if (isMounted.current) {
+            setIsSaving(false);
+        }
+    }
   };
 
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
@@ -273,7 +268,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
           />
         </div>
         
-        {/* Source Field */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <label htmlFor="source" className="block text-sm font-medium text-slate-600">Source</label>
