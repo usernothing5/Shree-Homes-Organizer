@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { CallLog, CallStatus } from '../types';
 
@@ -8,9 +9,10 @@ interface ScheduledCallbacksProps {
 const ScheduledCallbacks: React.FC<ScheduledCallbacksProps> = ({ callLogs }) => {
   const upcomingCallbacks = useMemo(() => {
     const now = new Date();
+    // Check for ANY log with a future callback time that isn't junk
     return callLogs
       .filter(log => 
-        log.status === CallStatus.CallBackLater && 
+        !log.isJunk &&
         log.callbackTime && 
         new Date(log.callbackTime) > now
       )
@@ -29,6 +31,11 @@ const ScheduledCallbacks: React.FC<ScheduledCallbacksProps> = ({ callLogs }) => 
                 {log.clientPhone && <p className="text-sm text-sky-600">{log.clientPhone}</p>}
                 <p className="text-sm text-slate-500 mt-1">
                   {new Date(log.callbackTime!).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                  {log.status !== CallStatus.CallBackLater && (
+                      <span className="ml-2 text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">
+                          {log.status}
+                      </span>
+                  )}
                 </p>
               </div>
               <div className="text-amber-500">

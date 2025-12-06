@@ -44,11 +44,15 @@ const UpdateDetailsShareModal: React.FC<UpdateDetailsShareModalProps> = ({ callL
         status: newStatus,
         notes: notes.trim(),
     };
-    if (newStatus === CallStatus.CallBackLater) {
-        if (!callbackDate || !callbackHour || !callbackMinute) {
-          alert('Please select a callback date and time.');
-          return;
-        }
+    
+    const hasCallbackData = callbackDate && callbackHour && callbackMinute;
+    
+    if (newStatus === CallStatus.CallBackLater && !hasCallbackData) {
+        alert('Please select a callback date and time.');
+        return;
+    }
+
+    if (hasCallbackData) {
         let hour24 = parseInt(callbackHour, 10);
         if (callbackPeriod === 'PM' && hour24 < 12) hour24 += 12;
         if (callbackPeriod === 'AM' && hour24 === 12) hour24 = 0;
@@ -56,6 +60,7 @@ const UpdateDetailsShareModal: React.FC<UpdateDetailsShareModalProps> = ({ callL
         const combinedDateTime = new Date(year, month - 1, day, hour24, Number(callbackMinute));
         updates.callbackTime = combinedDateTime.toISOString();
     }
+    
     onUpdate(callLog.id, updates);
   };
 
@@ -93,25 +98,25 @@ const UpdateDetailsShareModal: React.FC<UpdateDetailsShareModalProps> = ({ callL
               </select>
             </div>
 
-            {newStatus === CallStatus.CallBackLater && (
-              <div>
-                <label className="block text-sm font-medium text-slate-600">Callback Date & Time</label>
+            <div>
+                <label className="block text-sm font-medium text-slate-600">
+                    {newStatus === CallStatus.CallBackLater ? 'Callback Date & Time (Required)' : 'Next Follow-up (Optional)'}
+                </label>
                 <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                   <input id="callbackDate" type="date" value={callbackDate} onChange={(e) => setCallbackDate(e.target.value)} className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" required />
+                   <input id="callbackDate" type="date" value={callbackDate} onChange={(e) => setCallbackDate(e.target.value)} className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" required={newStatus === CallStatus.CallBackLater} />
                   <div className="grid grid-cols-3 gap-2">
-                    <select id="callbackHour" value={callbackHour} onChange={(e) => setCallbackHour(e.target.value)} className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md" required>
+                    <select id="callbackHour" value={callbackHour} onChange={(e) => setCallbackHour(e.target.value)} className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md" required={newStatus === CallStatus.CallBackLater}>
                       {hourOptions.map(hour => <option key={hour} value={hour}>{hour}</option>)}
                     </select>
-                    <select id="callbackMinute" value={callbackMinute} onChange={(e) => setCallbackMinute(e.target.value)} className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md" required>
+                    <select id="callbackMinute" value={callbackMinute} onChange={(e) => setCallbackMinute(e.target.value)} className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md" required={newStatus === CallStatus.CallBackLater}>
                       {minuteOptions.map(minute => <option key={minute} value={minute}>{minute}</option>)}
                     </select>
-                    <select id="callbackPeriod" value={callbackPeriod} onChange={(e) => setCallbackPeriod(e.target.value as 'AM' | 'PM')} className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md" required>
+                    <select id="callbackPeriod" value={callbackPeriod} onChange={(e) => setCallbackPeriod(e.target.value as 'AM' | 'PM')} className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md" required={newStatus === CallStatus.CallBackLater}>
                       <option value="AM">AM</option><option value="PM">PM</option>
                     </select>
                   </div>
                 </div>
               </div>
-            )}
 
             <div>
               <label htmlFor="callbackNotes" className="block text-sm font-medium text-slate-600">Call Notes</label>

@@ -90,8 +90,9 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   }, [callerName]);
 
   useEffect(() => {
+    // Only auto-fill if status is CallBackLater, otherwise leave blank to be optional
     if (status === CallStatus.CallBackLater) {
-      if (!callbackDate) { // Only set if not already set
+      if (!callbackDate) { 
         const { date, hour, minute, period } = getInitialIndianDateTime();
         setCallbackDate(date);
         setCallbackHour(hour);
@@ -138,8 +139,15 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         log.visitWon = visitWon;
     }
 
-    if (callbackDate && callbackHour && callbackMinute) {
-      if (status === CallStatus.CallBackLater || status === CallStatus.DetailsShare) {
+    // Handle Callback Time logic
+    const hasCallbackData = callbackDate && callbackHour && callbackMinute;
+    
+    if (status === CallStatus.CallBackLater && !hasCallbackData) {
+        alert('Please specify a date and time for the Call Back.');
+        return;
+    }
+
+    if (hasCallbackData) {
         let hour24 = parseInt(callbackHour, 10);
         if (callbackPeriod === 'PM' && hour24 < 12) {
           hour24 += 12;
@@ -151,7 +159,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         const [year, month, day] = callbackDate.split('-').map(Number);
         const combinedDateTime = new Date(year, month - 1, day, hour24, Number(callbackMinute));
         log.callbackTime = combinedDateTime.toISOString();
-      }
     }
 
     // --- OPTIMISTIC UPDATE START ---
@@ -164,8 +171,6 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         .catch((error) => {
             console.error("Error saving log:", error);
             alert(`Failed to save log for "${log.clientName}". Please try again.`);
-            // Note: We don't restore form state here to keep it simple, 
-            // assuming failure is rare with persistence enabled.
         });
         
     // 3. Reset form immediately (UI feels instant)
@@ -182,13 +187,11 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
     setSourceDetails('');
 
     // 4. Handle UI feedback asynchronously
-    // Show "Saving..." for a brief moment (500ms) to acknowledge the click
     setTimeout(() => {
         if (isMounted.current) {
             setIsSaving(false);
             setSaveMessage('Saved! Ready for next.');
             
-            // Clear the success message after 3 seconds
             setTimeout(() => {
                 if (isMounted.current) {
                     setSaveMessage(null);
@@ -343,55 +346,55 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
                 </button>
             </div>
         )}
-        {(status === CallStatus.CallBackLater || status === CallStatus.DetailsShare) && (
-          <div>
+
+        <div>
             <label className="block text-sm font-medium text-slate-600">
-              {status === CallStatus.CallBackLater ? 'Callback Date & Time' : 'Schedule Follow-up (Optional)'}
+                {status === CallStatus.CallBackLater ? 'Callback Date & Time (Required)' : 'Schedule Follow-up (Optional)'}
             </label>
             <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-               <input
-                id="callbackDate"
-                type="date"
-                value={callbackDate}
-                onChange={(e) => setCallbackDate(e.target.value)}
-                className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
-                required={status === CallStatus.CallBackLater}
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <select
-                  id="callbackHour"
-                  value={callbackHour}
-                  onChange={(e) => setCallbackHour(e.target.value)}
-                  className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
-                  required={status === CallStatus.CallBackLater}
-                >
-                  <option value="" disabled>HH</option>
-                  {hourOptions.map(hour => <option key={hour} value={hour}>{hour}</option>)}
-                </select>
-                <select
-                  id="callbackMinute"
-                  value={callbackMinute}
-                  onChange={(e) => setCallbackMinute(e.target.value)}
-                  className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
-                  required={status === CallStatus.CallBackLater}
-                >
-                  <option value="" disabled>MM</option>
-                  {minuteOptions.map(minute => <option key={minute} value={minute}>{minute}</option>)}
-                </select>
-                <select
-                  id="callbackPeriod"
-                  value={callbackPeriod}
-                  onChange={(e) => setCallbackPeriod(e.target.value as 'AM' | 'PM')}
-                  className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
-                  required={status === CallStatus.CallBackLater}
-                >
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-              </div>
+                <input
+                    id="callbackDate"
+                    type="date"
+                    value={callbackDate}
+                    onChange={(e) => setCallbackDate(e.target.value)}
+                    className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                    required={status === CallStatus.CallBackLater}
+                />
+                <div className="grid grid-cols-3 gap-2">
+                    <select
+                        id="callbackHour"
+                        value={callbackHour}
+                        onChange={(e) => setCallbackHour(e.target.value)}
+                        className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
+                        required={status === CallStatus.CallBackLater}
+                    >
+                        <option value="" disabled>HH</option>
+                        {hourOptions.map(hour => <option key={hour} value={hour}>{hour}</option>)}
+                    </select>
+                    <select
+                        id="callbackMinute"
+                        value={callbackMinute}
+                        onChange={(e) => setCallbackMinute(e.target.value)}
+                        className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
+                        required={status === CallStatus.CallBackLater}
+                    >
+                        <option value="" disabled>MM</option>
+                        {minuteOptions.map(minute => <option key={minute} value={minute}>{minute}</option>)}
+                    </select>
+                    <select
+                        id="callbackPeriod"
+                        value={callbackPeriod}
+                        onChange={(e) => setCallbackPeriod(e.target.value as 'AM' | 'PM')}
+                        className="block w-full pl-3 pr-8 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
+                        required={status === CallStatus.CallBackLater}
+                    >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                    </select>
+                </div>
             </div>
-          </div>
-        )}
+        </div>
+
         <div>
           <label htmlFor="notes" className="block text-sm font-medium text-slate-600">Call Notes</label>
           <textarea

@@ -234,8 +234,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
 
     if (!activeCallback) {
       const now = new Date();
+      // Changed Logic: Check ANY log with a callback time, regardless of status.
       const overdueCallback = callLogs.find(log =>
-        log.status === CallStatus.CallBackLater &&
         !log.isJunk && // Exclude junk from notifications
         log.callbackTime &&
         new Date(log.callbackTime) <= now &&
@@ -247,7 +247,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     }
 
     callLogs.forEach(log => {
-      if (log.status === CallStatus.CallBackLater && log.callbackTime && !log.isJunk) {
+      // Changed Logic: Schedule timer for ANY log with a callback time, regardless of status.
+      if (log.callbackTime && !log.isJunk) {
         const callbackDate = new Date(log.callbackTime);
         const now = new Date();
         if (callbackDate > now) {
@@ -528,10 +529,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       finalUpdates.callbackTime = finalUpdates.callbackTime ? Timestamp.fromDate(new Date(finalUpdates.callbackTime)) : null;
     }
     
-    if (finalUpdates.status && finalUpdates.status !== CallStatus.CallBackLater) {
-        finalUpdates.callbackTime = null;
-    }
-
     await updateDoc(logRef, finalUpdates);
     touchProjectTimestamp();
     
