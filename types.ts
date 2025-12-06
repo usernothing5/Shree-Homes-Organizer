@@ -2,9 +2,13 @@
 export enum CallStatus {
   Interested = 'Interested',
   NotInterested = 'Not Interested',
+  Ringing = 'Ringing', // Kept for historical data
   NotAnswered = 'Not Answered',
   CallBackLater = 'Call Back Later',
   DetailsShare = 'Details Share',
+  Booked = 'Booked',
+  SiteVisitGenerated = 'Site Visit Generated',
+  SecondSiteVisit = 'Second Site Visit',
 }
 
 export interface Project {
@@ -25,6 +29,9 @@ export interface CallLog {
   notes?: string;
   followUpCount?: number;
   visitWon?: boolean;
+  source?: string;
+  sourceDetails?: string;
+  isJunk?: boolean;
 }
 
 export interface User {

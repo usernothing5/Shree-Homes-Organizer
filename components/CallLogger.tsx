@@ -8,6 +8,25 @@ interface CallLoggerProps {
   projectName?: string;
 }
 
+// Updated statuses: Restored NotInterested, Removed Ringing
+const SELECTABLE_STATUSES = [
+  CallStatus.Interested,
+  CallStatus.DetailsShare,
+  CallStatus.SiteVisitGenerated,
+  CallStatus.SecondSiteVisit,
+  CallStatus.Booked,
+  CallStatus.CallBackLater,
+  CallStatus.NotAnswered,
+  CallStatus.NotInterested,
+];
+
+const SOURCE_OPTIONS = [
+  'Facebook',
+  'Channel Partner',
+  'Walking',
+  'Reference'
+];
+
 const getInitialIndianDateTime = () => {
   const now = new Date();
   
@@ -46,6 +65,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   const [callerName, setCallerName] = useState(() => localStorage.getItem('callerName') || '');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
+  
+  const [source, setSource] = useState(SOURCE_OPTIONS[0]);
+  const [sourceDetails, setSourceDetails] = useState('');
+
   const [status, setStatus] = useState<CallStatus>(CallStatus.Interested);
   const [callbackDate, setCallbackDate] = useState('');
   const [callbackHour, setCallbackHour] = useState('');
@@ -93,6 +116,11 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
       alert('Please enter a client name.');
       return;
     }
+    
+    if ((source === 'Channel Partner' || source === 'Reference') && !sourceDetails.trim()) {
+        alert(`Please enter the name of the ${source}.`);
+        return;
+    }
 
     const log: Omit<CallLog, 'id' | 'timestamp' | 'projectId'> = {
       callerName: callerName.trim(),
@@ -101,9 +129,12 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
       status,
       notes: notes.trim(),
       visitWon: false,
+      source,
+      sourceDetails: (source === 'Channel Partner' || source === 'Reference') ? sourceDetails.trim() : undefined,
     };
     
-    if (status === CallStatus.Interested || status === CallStatus.DetailsShare) {
+    // Auto-mark visitWon if the status implies success, or use the toggle
+    if (status === CallStatus.Interested || status === CallStatus.DetailsShare || status === CallStatus.Booked || status === CallStatus.SiteVisitGenerated || status === CallStatus.SecondSiteVisit) {
         log.visitWon = visitWon;
     }
 
@@ -147,6 +178,8 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
     setCallbackPeriod('AM');
     setNotes('');
     setVisitWon(false);
+    setSource(SOURCE_OPTIONS[0]);
+    setSourceDetails('');
 
     // 4. Handle UI feedback asynchronously
     // Show "Saving..." for a brief moment (500ms) to acknowledge the click
@@ -181,6 +214,14 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
       if (saveMessage) return 'bg-green-600 hover:bg-green-700';
       return 'bg-sky-600 hover:bg-sky-700';
   };
+
+  const showVisitToggle = [
+    CallStatus.Interested, 
+    CallStatus.DetailsShare, 
+    CallStatus.Booked, 
+    CallStatus.SiteVisitGenerated, 
+    CallStatus.SecondSiteVisit
+  ].includes(status);
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md border-t-4 border-sky-500">
@@ -228,6 +269,41 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
             placeholder="e.g., 9876543210"
           />
         </div>
+        
+        {/* Source Field */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label htmlFor="source" className="block text-sm font-medium text-slate-600">Source</label>
+                <select
+                    id="source"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
+                >
+                    {SOURCE_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                </select>
+            </div>
+            
+            {(source === 'Channel Partner' || source === 'Reference') && (
+                <div>
+                    <label htmlFor="sourceDetails" className="block text-sm font-medium text-slate-600">
+                        {source === 'Channel Partner' ? 'Channel Partner Name' : 'Referer Name'}
+                    </label>
+                    <input
+                        id="sourceDetails"
+                        type="text"
+                        value={sourceDetails}
+                        onChange={(e) => setSourceDetails(e.target.value)}
+                        className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                        placeholder={`Name of ${source}`}
+                        required
+                    />
+                </div>
+            )}
+        </div>
+
         <div>
           <label htmlFor="status" className="block text-sm font-medium text-slate-600">FEEDBACK</label>
           <select
@@ -236,12 +312,12 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
             onChange={(e) => setStatus(e.target.value as CallStatus)}
             className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-white border border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
           >
-            {Object.values(CallStatus).map((s) => (
+            {SELECTABLE_STATUSES.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
         </div>
-        {(status === CallStatus.Interested || status === CallStatus.DetailsShare) && (
+        {showVisitToggle && (
             <div className="flex items-center justify-between pt-2">
                 <span className="flex-grow flex flex-col">
                     <label htmlFor="visitWon" className="text-sm font-medium text-slate-600">Visit Won</label>

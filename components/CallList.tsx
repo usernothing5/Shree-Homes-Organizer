@@ -8,6 +8,7 @@ interface CallListProps {
   onEditNotes: (log: CallLog) => void;
   onUpdateFollowUpCount: (id: string, count: number) => void;
   onRequestVisitStatusUpdate: (log: CallLog) => void;
+  onToggleJunk: (id: string, currentStatus: boolean | undefined) => void;
 }
 
 const getStatusColor = (status: CallStatus): string => {
@@ -16,6 +17,14 @@ const getStatusColor = (status: CallStatus): string => {
       return 'bg-emerald-100 text-emerald-800';
     case CallStatus.DetailsShare:
       return 'bg-sky-100 text-sky-800';
+    case CallStatus.Booked:
+      return 'bg-purple-100 text-purple-800';
+    case CallStatus.SiteVisitGenerated:
+      return 'bg-blue-100 text-blue-800';
+    case CallStatus.SecondSiteVisit:
+      return 'bg-indigo-100 text-indigo-800';
+    case CallStatus.Ringing:
+      return 'bg-slate-200 text-slate-800'; // Matched to Not Answered
     case CallStatus.NotInterested:
       return 'bg-red-100 text-red-800';
     case CallStatus.NotAnswered:
@@ -34,12 +43,20 @@ const isToday = (date: Date) => {
            date.getFullYear() === today.getFullYear();
 };
 
-const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; onEditNotes: (log: CallLog) => void; onUpdateFollowUpCount: (id: string, count: number) => void; onRequestVisitStatusUpdate: (log: CallLog) => void; }> = ({ log, deleteCallLog, onEditNotes, onUpdateFollowUpCount, onRequestVisitStatusUpdate }) => {
+const CallLogRow: React.FC<{ 
+    log: CallLog; 
+    deleteCallLog: (id: string) => void; 
+    onEditNotes: (log: CallLog) => void; 
+    onUpdateFollowUpCount: (id: string, count: number) => void; 
+    onRequestVisitStatusUpdate: (log: CallLog) => void; 
+    onToggleJunk: (id: string, currentStatus: boolean | undefined) => void;
+}> = ({ log, deleteCallLog, onEditNotes, onUpdateFollowUpCount, onRequestVisitStatusUpdate, onToggleJunk }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditingFollowUp, setIsEditingFollowUp] = useState(false);
   const [followUpCount, setFollowUpCount] = useState(String(log.followUpCount || 0));
 
-  const hasNotes = log.notes && log.notes.trim().length > 0;
+  // Determine if row should be expandable (if notes or source info exists)
+  const hasDetails = (log.notes && log.notes.trim().length > 0) || !!log.source;
 
   const handleSaveFollowUp = () => {
     const newCount = parseInt(followUpCount, 10);
@@ -48,12 +65,20 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
     }
     setIsEditingFollowUp(false);
   };
+  
+  const showVisitToggle = [
+    CallStatus.Interested, 
+    CallStatus.DetailsShare, 
+    CallStatus.Booked, 
+    CallStatus.SiteVisitGenerated, 
+    CallStatus.SecondSiteVisit
+  ].includes(log.status);
 
   return (
     <>
       <tr 
-        onClick={() => hasNotes && setIsExpanded(!isExpanded)} 
-        className={hasNotes ? 'cursor-pointer hover:bg-slate-50' : ''}
+        onClick={() => hasDetails && setIsExpanded(!isExpanded)} 
+        className={`${hasDetails ? 'cursor-pointer hover:bg-slate-50' : ''} ${log.isJunk ? 'bg-slate-50' : ''}`}
       >
         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
           <div>{log.clientName}</div>
@@ -64,11 +89,11 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm">
           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(log.status)}`}>
-            {log.status}
+            {log.status === CallStatus.Ringing ? CallStatus.NotAnswered : log.status}
           </span>
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-            {(log.status === CallStatus.Interested || log.status === CallStatus.DetailsShare) && (
+            {showVisitToggle && (
             <button
                 type="button"
                 className={`${
@@ -126,32 +151,63 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
           {new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-          <button 
-            onClick={(e) => { e.stopPropagation(); onEditNotes(log); }} 
-            className="text-slate-500 hover:text-sky-700 p-1"
-            aria-label={`Edit notes for ${log.clientName}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-              <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
-            </svg>
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); deleteCallLog(log.id); }} 
-            className="text-red-600 hover:text-red-900 p-1"
-            aria-label={`Delete log for ${log.clientName}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-            </svg>
-          </button>
+          <div className="flex items-center justify-end gap-1">
+            <button 
+                onClick={(e) => { e.stopPropagation(); onEditNotes(log); }} 
+                className="text-slate-500 hover:text-sky-700 p-1"
+                aria-label={`Edit notes for ${log.clientName}`}
+                title="Edit Notes"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                </svg>
+            </button>
+            <button 
+                onClick={(e) => { e.stopPropagation(); onToggleJunk(log.id, log.isJunk); }} 
+                className={`${log.isJunk ? 'text-emerald-600 hover:text-emerald-800' : 'text-amber-600 hover:text-amber-800'} p-1`}
+                aria-label={log.isJunk ? "Restore from Junk" : "Move to Junk"}
+                title={log.isJunk ? "Restore from Junk" : "Move to Junk"}
+            >
+                {log.isJunk ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                         <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                    </svg>
+                ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                    </svg>
+                )}
+            </button>
+            <button 
+                onClick={(e) => { e.stopPropagation(); deleteCallLog(log.id); }} 
+                className="text-red-600 hover:text-red-900 p-1"
+                aria-label={`Delete log for ${log.clientName}`}
+                title="Delete Permanently"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                </svg>
+            </button>
+          </div>
         </td>
       </tr>
-      {isExpanded && hasNotes && (
+      {isExpanded && hasDetails && (
         <tr className="bg-slate-50">
           <td colSpan={8} className="px-6 py-4 text-sm text-slate-600 border-t border-slate-200">
-            <h4 className="font-semibold mb-1 text-slate-800">Notes:</h4>
-            <p className="whitespace-pre-wrap pl-2 border-l-2 border-slate-300">{log.notes}</p>
+            {log.source && (
+                <div className="mb-2">
+                    <span className="font-semibold text-slate-700">Source: </span>
+                    <span className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-xs mr-2">{log.source}</span>
+                    {log.sourceDetails && <span className="text-slate-500 italic">({log.sourceDetails})</span>}
+                </div>
+            )}
+            {log.notes && (
+                <>
+                    <h4 className="font-semibold mb-1 text-slate-800">Notes:</h4>
+                    <p className="whitespace-pre-wrap pl-2 border-l-2 border-slate-300">{log.notes}</p>
+                </>
+            )}
           </td>
         </tr>
       )}
@@ -160,8 +216,8 @@ const CallLogRow: React.FC<{ log: CallLog; deleteCallLog: (id: string) => void; 
 };
 
 
-const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNotes, onUpdateFollowUpCount, onRequestVisitStatusUpdate }) => {
-  const [view, setView] = useState<'today' | 'history'>('today');
+const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNotes, onUpdateFollowUpCount, onRequestVisitStatusUpdate, onToggleJunk }) => {
+  const [view, setView] = useState<'today' | 'history' | 'junk'>('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [initialized, setInitialized] = useState(false);
 
@@ -176,48 +232,50 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
     );
   }, [callLogs, searchQuery]);
   
-  const todaysLogs = useMemo(() => filteredLogs.filter(log => isToday(new Date(log.timestamp))), [filteredLogs]);
+  // Categorize logs based on Junk status and Date
+  const { todaysLogs, historicalLogs, junkLogs } = useMemo(() => {
+    const today = filteredLogs.filter(log => !log.isJunk && isToday(new Date(log.timestamp)));
+    const history = filteredLogs.filter(log => !log.isJunk && (!isToday(new Date(log.timestamp)) || view === 'history'));
+    const junk = filteredLogs.filter(log => log.isJunk);
+    return { todaysLogs: today, historicalLogs: history, junkLogs: junk };
+  }, [filteredLogs, view]);
 
-  const hasHistory = useMemo(() => {
-      const todayString = new Date().toISOString().split('T')[0];
-      return callLogs.some(log => log.timestamp.split('T')[0] !== todayString);
-  }, [callLogs]);
-
-  // AUTO-SWITCH to History if Today is empty but we have logs
+  // AUTO-SWITCH to History if Today is empty but we have non-junk logs
   useEffect(() => {
       if (!initialized && callLogs.length > 0) {
-          if (todaysLogs.length === 0) {
+          const hasToday = callLogs.some(log => !log.isJunk && isToday(new Date(log.timestamp)));
+          if (!hasToday) {
               setView('history');
           }
           setInitialized(true);
       }
-  }, [callLogs, todaysLogs, initialized]);
+  }, [callLogs, initialized]);
 
 
-  const historicalLogsByDate = useMemo(() => {
+  const groupedLogs = useMemo(() => {
+    let logsToRender: CallLog[] = [];
+    if (view === 'today') logsToRender = todaysLogs;
+    else if (view === 'junk') logsToRender = junkLogs;
+    else logsToRender = filteredLogs.filter(log => !log.isJunk); // History view shows all non-junk logs usually
+
     const groups: { [key: string]: CallLog[] } = {};
     const todayString = new Date().toISOString().split('T')[0];
 
-    filteredLogs.forEach(log => {
+    logsToRender.forEach(log => {
       const logDate = new Date(log.timestamp);
       const dateString = logDate.toISOString().split('T')[0];
-
-      if (dateString !== todayString || view === 'history') {
-        // If viewing history, include everything not in "Today" view, 
-        // OR if specifically in history view, we can group everything by date.
-        // Standard logic: History usually means "past". But if we switch to history view because today is empty,
-        // we should just show all dates.
-        
-        if (!groups[dateString]) {
-          groups[dateString] = [];
-        }
-        groups[dateString].push(log);
+      
+      // If view is 'today', we only have today's logs anyway.
+      // If view is 'history' or 'junk', we group by date.
+      if (!groups[dateString]) {
+        groups[dateString] = [];
       }
+      groups[dateString].push(log);
     });
 
     return Object.entries(groups)
       .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime());
-  }, [filteredLogs, view]);
+  }, [filteredLogs, todaysLogs, junkLogs, view]);
   
   const renderTable = (logs: CallLog[]) => (
     <table className="min-w-full divide-y divide-slate-200">
@@ -234,7 +292,15 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
       </thead>
       <tbody className="bg-white divide-y divide-slate-200">
         {logs.map((log) => (
-          <CallLogRow key={log.id} log={log} deleteCallLog={deleteCallLog} onEditNotes={onEditNotes} onUpdateFollowUpCount={onUpdateFollowUpCount} onRequestVisitStatusUpdate={onRequestVisitStatusUpdate} />
+          <CallLogRow 
+            key={log.id} 
+            log={log} 
+            deleteCallLog={deleteCallLog} 
+            onEditNotes={onEditNotes} 
+            onUpdateFollowUpCount={onUpdateFollowUpCount} 
+            onRequestVisitStatusUpdate={onRequestVisitStatusUpdate}
+            onToggleJunk={onToggleJunk}
+          />
         ))}
       </tbody>
     </table>
@@ -244,7 +310,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4">
         <h2 className="text-xl font-bold text-slate-700">
-          {view === 'today' ? "Today's Call Logs" : "All Call Logs"}
+          {view === 'today' ? "Today's Call Logs" : view === 'junk' ? "Junk / Spam Leads" : "All Call Logs"}
         </h2>
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <div className="relative w-full sm:w-auto">
@@ -275,11 +341,17 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                 >
                 History / All
                 </button>
+                <button
+                onClick={() => setView('junk')}
+                className={`px-3 py-1 rounded-full transition-colors ${view === 'junk' ? 'bg-white text-slate-800 shadow' : 'text-slate-600 hover:bg-slate-300'}`}
+                >
+                Junk
+                </button>
             </div>
         </div>
       </div>
       <div className="overflow-x-auto">
-        {view === 'today' && (
+        {view === 'today' ? (
           todaysLogs.length > 0 ? (
             renderTable(todaysLogs)
           ) : (
@@ -290,16 +362,15 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
               <p className="mt-2 text-sm text-slate-500">
                 {searchQuery ? `No logs found matching "${searchQuery}".` : 'No calls logged for today.'}
               </p>
-              {callLogs.length > 0 && (
+              {callLogs.filter(l => !l.isJunk).length > 0 && (
                  <button onClick={() => setView('history')} className="mt-4 bg-sky-50 text-sky-700 px-4 py-2 rounded-md hover:bg-sky-100 transition-colors text-sm font-medium border border-sky-200">
                      View All Logs
                  </button>
               )}
             </div>
           )
-        )}
-        {view === 'history' && (
-          historicalLogsByDate.length > 0 ? (
+        ) : (
+          groupedLogs.length > 0 ? (
             <table className="min-w-full">
               <thead className="bg-slate-50">
                 <tr>
@@ -313,7 +384,7 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                 </tr>
               </thead>
               <tbody className="bg-white">
-                {historicalLogsByDate.map(([date, logs]) => (
+                {groupedLogs.map(([date, logs]) => (
                   <React.Fragment key={date}>
                     <tr className="bg-slate-100">
                       <td colSpan={8} className="px-6 py-2 text-sm font-bold text-slate-600">
@@ -321,7 +392,15 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
                       </td>
                     </tr>
                     {logs.map(log => (
-                      <CallLogRow key={log.id} log={log} deleteCallLog={deleteCallLog} onEditNotes={onEditNotes} onUpdateFollowUpCount={onUpdateFollowUpCount} onRequestVisitStatusUpdate={onRequestVisitStatusUpdate}/>
+                      <CallLogRow 
+                        key={log.id} 
+                        log={log} 
+                        deleteCallLog={deleteCallLog} 
+                        onEditNotes={onEditNotes} 
+                        onUpdateFollowUpCount={onUpdateFollowUpCount} 
+                        onRequestVisitStatusUpdate={onRequestVisitStatusUpdate}
+                        onToggleJunk={onToggleJunk}
+                      />
                     ))}
                   </React.Fragment>
                 ))}
@@ -330,10 +409,17 @@ const CallList: React.FC<CallListProps> = ({ callLogs, deleteCallLog, onEditNote
           ) : (
             <div className="text-center py-10">
                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                {view === 'junk' 
+                    ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                }
               </svg>
               <p className="mt-2 text-sm text-slate-500">
-                {searchQuery ? `No logs found matching "${searchQuery}".` : 'No call logs found.'}
+                {searchQuery 
+                    ? `No logs found matching "${searchQuery}".` 
+                    : view === 'junk' 
+                        ? 'Trash is empty.' 
+                        : 'No call logs found.'}
               </p>
             </div>
           )

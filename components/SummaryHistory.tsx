@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { CallLog, CallStatus } from '../types';
 
@@ -12,6 +13,9 @@ const SummaryHistory: React.FC<SummaryHistoryProps> = ({ callLogs }) => {
     const todayString = today.toISOString().split('T')[0];
 
     callLogs.forEach(log => {
+      // Skip if junk
+      if (log.isJunk) return;
+
       const logDate = new Date(log.timestamp);
       const dateString = logDate.toISOString().split('T')[0];
 
@@ -24,12 +28,21 @@ const SummaryHistory: React.FC<SummaryHistoryProps> = ({ callLogs }) => {
       }
 
       statsByDate[dateString].totalCalls++;
-      if (log.status !== CallStatus.NotAnswered) {
+      
+      // Ringing and NotAnswered count as NOT answered
+      if (log.status !== CallStatus.NotAnswered && log.status !== CallStatus.Ringing) {
         statsByDate[dateString].answeredCalls++;
       }
-      if (log.status === CallStatus.Interested || log.status === CallStatus.DetailsShare) {
+      
+      // All positive outcomes count as Interested
+      if (log.status === CallStatus.Interested || 
+          log.status === CallStatus.DetailsShare || 
+          log.status === CallStatus.Booked || 
+          log.status === CallStatus.SiteVisitGenerated || 
+          log.status === CallStatus.SecondSiteVisit) {
         statsByDate[dateString].interestedClients++;
       }
+      
       if (log.status === CallStatus.NotInterested) {
         statsByDate[dateString].notInterestedClients++;
       }

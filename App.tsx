@@ -62,24 +62,20 @@ const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
 
 
 const App: React.FC = () => {
-  // Hooks must be called at the top level
   const { user, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth();
-
+  
   if (!isConfigured) {
     return <FirebaseConfigMessage />;
   }
 
   if (loading) {
-    return <LoadingScreen message="Initializing authentication..." />;
+     return <LoadingScreen message="Initializing CRM..." />;
   }
 
   if (!user) {
     return <AuthPage onSignIn={signIn} onSignUp={signUp} onSignInWithGoogle={signInWithGoogle} />;
   }
   
-  // Directly render CRM App if authenticated. 
-  // We rely on the internal Firestore listeners to handle data connection state,
-  // preventing the "slow load" feeling of a blocking check.
   return <CrmApp user={user} onSignOut={signOut} />;
 };
 

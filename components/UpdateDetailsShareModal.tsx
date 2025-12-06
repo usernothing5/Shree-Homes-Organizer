@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { CallLog, CallStatus } from '../types';
 
@@ -60,10 +59,15 @@ const UpdateDetailsShareModal: React.FC<UpdateDetailsShareModalProps> = ({ callL
     onUpdate(callLog.id, updates);
   };
 
+  // Updated statuses: Restored NotInterested, Removed Ringing
   const availableStatuses = [
     CallStatus.Interested,
-    CallStatus.NotInterested,
+    CallStatus.SiteVisitGenerated,
+    CallStatus.SecondSiteVisit,
+    CallStatus.Booked,
     CallStatus.CallBackLater,
+    CallStatus.NotAnswered,
+    CallStatus.NotInterested,
   ];
   
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));

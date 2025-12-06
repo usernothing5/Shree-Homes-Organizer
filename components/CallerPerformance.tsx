@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { CallLog, CallStatus, CallerStats } from '../types';
 import PieChart from './PieChart';
@@ -143,12 +144,21 @@ const CallerPerformance: React.FC<CallerPerformanceProps> = ({ todaysLogs, overr
       }
       const callerStats = callers[name];
       callerStats.totalCalls++;
-      if (log.status !== CallStatus.NotAnswered) {
+      
+      // Ringing and NotAnswered count as NOT answered
+      if (log.status !== CallStatus.NotAnswered && log.status !== CallStatus.Ringing) {
         callerStats.answeredCalls++;
       }
-      if (log.status === CallStatus.Interested || log.status === CallStatus.DetailsShare) {
+      
+      // Interested includes Booked, SiteVisit, etc.
+      if (log.status === CallStatus.Interested || 
+          log.status === CallStatus.DetailsShare || 
+          log.status === CallStatus.Booked || 
+          log.status === CallStatus.SiteVisitGenerated || 
+          log.status === CallStatus.SecondSiteVisit) {
         callerStats.interestedClients++;
       }
+
       if (log.status === CallStatus.NotInterested) {
         callerStats.notInterestedClients++;
       }

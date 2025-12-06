@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { CallLog, CallStatus } from '../types';
 
@@ -62,9 +60,12 @@ const ResolveCallbackModal: React.FC<ResolveCallbackModalProps> = ({ callLog, on
   const availableStatuses = [
     CallStatus.Interested,
     CallStatus.DetailsShare,
-    CallStatus.NotInterested,
-    CallStatus.NotAnswered,
+    CallStatus.SiteVisitGenerated,
+    CallStatus.SecondSiteVisit,
+    CallStatus.Booked,
     CallStatus.CallBackLater,
+    CallStatus.NotAnswered,
+    CallStatus.NotInterested,
   ];
 
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));

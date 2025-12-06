@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { CallLog, CallStatus } from '../types';
 import SummaryHistory from './SummaryHistory';
@@ -30,13 +31,26 @@ const Stats: React.FC<StatsProps> = ({ callLogs }) => {
   const [view, setView] = useState<'today' | 'history'>('today');
 
   const dailyStats = useMemo(() => {
-    const todaysLogs = callLogs.filter(log => isToday(new Date(log.timestamp)));
+    // Filter out junk leads
+    const todaysLogs = callLogs.filter(log => !log.isJunk && isToday(new Date(log.timestamp)));
     
     const totalCalls = todaysLogs.length;
-    const answeredCalls = todaysLogs.filter(log => log.status !== CallStatus.NotAnswered).length;
-    const interestedClients = todaysLogs.filter(log => 
-      log.status === CallStatus.Interested || log.status === CallStatus.DetailsShare
+    
+    // Ringing and NotAnswered both count as not answered
+    const answeredCalls = todaysLogs.filter(log => 
+        log.status !== CallStatus.NotAnswered && 
+        log.status !== CallStatus.Ringing
     ).length;
+
+    // Interested includes multiple positive outcomes
+    const interestedClients = todaysLogs.filter(log => 
+      log.status === CallStatus.Interested || 
+      log.status === CallStatus.DetailsShare ||
+      log.status === CallStatus.Booked ||
+      log.status === CallStatus.SiteVisitGenerated ||
+      log.status === CallStatus.SecondSiteVisit
+    ).length;
+
     const notInterestedClients = todaysLogs.filter(log => log.status === CallStatus.NotInterested).length;
     
     return { totalCalls, answeredCalls, interestedClients, notInterestedClients };
@@ -44,7 +58,7 @@ const Stats: React.FC<StatsProps> = ({ callLogs }) => {
 
   const hasHistory = useMemo(() => {
     const todayString = new Date().toISOString().split('T')[0];
-    return callLogs.some(log => log.timestamp.split('T')[0] !== todayString);
+    return callLogs.some(log => !log.isJunk && log.timestamp.split('T')[0] !== todayString);
   }, [callLogs]);
 
 

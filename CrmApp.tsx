@@ -236,6 +236,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       const now = new Date();
       const overdueCallback = callLogs.find(log =>
         log.status === CallStatus.CallBackLater &&
+        !log.isJunk && // Exclude junk from notifications
         log.callbackTime &&
         new Date(log.callbackTime) <= now &&
         !activeCallback
@@ -246,7 +247,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     }
 
     callLogs.forEach(log => {
-      if (log.status === CallStatus.CallBackLater && log.callbackTime) {
+      if (log.status === CallStatus.CallBackLater && log.callbackTime && !log.isJunk) {
         const callbackDate = new Date(log.callbackTime);
         const now = new Date();
         if (callbackDate > now) {
@@ -310,7 +311,12 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         };
 
         const statusString = findKey(['feedback', 'status']);
-        const status = Object.values(CallStatus).find(s => s.toLowerCase() === statusString?.toLowerCase());
+        let status = Object.values(CallStatus).find(s => s.toLowerCase() === statusString?.toLowerCase());
+        
+        // Auto-migrate Ringing to NotAnswered on import
+        if (status === CallStatus.Ringing) {
+            status = CallStatus.NotAnswered;
+        }
 
         let timestamp: string | undefined;
         const dateValue = findKey(['date', 'timestamp']);
@@ -339,6 +345,9 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
             timestamp: timestamp,
             followUpCount: 0,
             visitWon: false,
+            source: findKey(['source', 'lead source']),
+            sourceDetails: findKey(['source details', 'source info', 'referer']),
+            isJunk: false,
         };
 
         if (callbackTime) {
@@ -454,14 +463,17 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     const data = callLogs.map(log => ({
         "Client Name": log.clientName,
         "Phone": log.clientPhone,
-        "Status": log.status,
+        "Source": log.source,
+        "Source Details": log.sourceDetails,
+        "Status": log.status === CallStatus.Ringing ? CallStatus.NotAnswered : log.status,
         "Caller": log.callerName,
         "Notes": log.notes,
         "Date": new Date(log.timestamp).toLocaleDateString(),
         "Time": new Date(log.timestamp).toLocaleTimeString(),
         "Callback Time": log.callbackTime ? new Date(log.callbackTime).toLocaleString() : '',
         "Visit Won": log.visitWon ? "Yes" : "No",
-        "Follow-ups": log.followUpCount
+        "Follow-ups": log.followUpCount,
+        "Is Junk": log.isJunk ? "Yes" : "No"
     }));
 
     // @ts-ignore
@@ -485,6 +497,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       timestamp: new Date().toISOString(),
       projectId: activeProjectId,
       followUpCount: 0,
+      isJunk: false,
     };
     
     // Primary action: Save the log
@@ -550,6 +563,13 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     handleUpdateVisitStatus(logToConfirmVisit.id, !logToConfirmVisit.visitWon);
     setLogToConfirmVisit(null);
   };
+  
+  const handleToggleJunk = useCallback(async (logId: string, currentStatus: boolean | undefined) => {
+      if (!user) return;
+      const logRef = doc(db, 'callLogs', logId);
+      await updateDoc(logRef, { isJunk: !currentStatus });
+      touchProjectTimestamp();
+  }, [user, activeProjectId]);
 
 
   const handleAddProject = async (name: string) => {
@@ -693,7 +713,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
                 />
                 <Stats callLogs={callLogs} />
                 <CallerPerformance 
-                  todaysLogs={callLogs.filter(log => new Date(log.timestamp).toDateString() === new Date().toDateString())}
+                  todaysLogs={callLogs.filter(log => new Date(log.timestamp).toDateString() === new Date().toDateString() && !log.isJunk)}
                   overrides={activeProjectId ? statOverrides[activeProjectId]?.[new Date().toISOString().split('T')[0]] : undefined}
                   onUpdateOverride={() => { /* TODO: Implement stat override updates */}}
                 />
@@ -715,6 +735,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
                   onEditNotes={(log) => setLogToUpdate({ log, type: 'edit-notes' })}
                   onUpdateFollowUpCount={handleUpdateFollowUpCount}
                   onRequestVisitStatusUpdate={handleRequestVisitStatusUpdate}
+                  onToggleJunk={handleToggleJunk}
                 />
               </div>
             </div>
