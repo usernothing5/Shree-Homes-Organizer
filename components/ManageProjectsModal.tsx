@@ -66,18 +66,24 @@ const ManageProjectsModal: React.FC<ManageProjectsModalProps> = ({ projects, act
           <h3 className="text-lg font-semibold text-slate-600 mb-2">Existing Projects</h3>
           {projects.map(project => (
             <div key={project.id} className={`flex justify-between items-center p-3 rounded-md ${project.id === activeProjectId ? 'bg-sky-50 border border-sky-200' : 'bg-slate-50'}`}>
-              <div className="flex flex-col">
-                  <span className={`font-medium ${project.id === activeProjectId ? 'text-sky-800' : 'text-slate-800'}`}>
-                      {project.name} {project.id === activeProjectId && <span className="text-xs font-bold bg-sky-200 text-sky-800 px-1.5 py-0.5 rounded ml-1">(Current)</span>}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                      Last Active: {formatLastActive(project.lastUpdated)}
-                  </span>
+              <div className="flex flex-col overflow-hidden">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-medium ${project.id === activeProjectId ? 'text-sky-800' : 'text-slate-800'}`}>
+                        {project.name}
+                    </span>
+                    {project.id === activeProjectId && <span className="text-xs font-bold bg-sky-200 text-sky-800 px-1.5 py-0.5 rounded">Current</span>}
+                  </div>
+                  <div className="flex flex-col">
+                      <span className="text-xs text-slate-400 font-mono truncate" title={project.id}>ID: {project.id}</span>
+                      <span className="text-xs text-slate-500">
+                          Last Active: {formatLastActive(project.lastUpdated)}
+                      </span>
+                  </div>
               </div>
               <button
                 onClick={() => onDeleteProject(project.id)}
                 disabled={projects.length <= 1 || project.id === activeProjectId}
-                className="text-red-500 hover:text-red-700 disabled:text-slate-300 disabled:cursor-not-allowed p-2 transition-colors"
+                className="text-red-500 hover:text-red-700 disabled:text-slate-300 disabled:cursor-not-allowed p-2 transition-colors ml-2"
                 aria-label={`Delete ${project.name}`}
                 title={project.id === activeProjectId ? "Cannot delete active project" : "Delete project"}
               >

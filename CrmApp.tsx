@@ -31,6 +31,7 @@ import ImportStatusModal, { ImportResults } from './components/ImportStatusModal
 import ImportReviewModal from './components/ImportReviewModal';
 import CallerPerformance, { DailyCallerOverrides } from './components/CallerPerformance';
 import ConfirmVisitStatusModal from './components/ConfirmVisitStatusModal';
+import FirestoreRulesMessage from './components/FirestoreRulesMessage'; // Ensure this is imported if not already
 
 
 type LogUpdatePayload = {
@@ -180,8 +181,6 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     }
     
     // Use root-level 'callLogs' collection
-    // Note: We are relying on client-side sorting for optimal initial load speed
-    // combined with Firestore Persistence for offline support.
     const logsCol = collection(db, 'callLogs');
     const logsQuery = query(logsCol, where("projectId", "==", activeProjectId));
     
@@ -193,9 +192,14 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
             callbackTime: (d.data().callbackTime as Timestamp)?.toDate().toISOString()
         } as CallLog));
         
-        // Client-side sort is fast for <5000 records and avoids composite index requirement errors
+        // Client-side sort is fast for <5000 records
         fetchedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setCallLogs(fetchedLogs);
+    }, (error) => {
+        console.error("Error fetching logs:", error);
+        if (error.code === 'permission-denied') {
+             setPermissionError("Read permission denied. Please update your Firestore Security Rules.");
+        }
     });
 
     const overridesDoc = doc(db, 'statOverrides', activeProjectId);
@@ -205,6 +209,8 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         } else {
             setStatOverrides(prev => ({...prev, [activeProjectId]: {}}));
         }
+    }, (error) => {
+        console.warn("Error fetching stats overrides:", error);
     });
 
     return () => {
@@ -223,6 +229,17 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
       }
       return false;
   }, [projects, activeProjectId]);
+
+  // Check for duplicate project names which causes sync confusion
+  const duplicateProjectWarning = useMemo(() => {
+      if (!projects.length) return null;
+      const names = projects.map(p => p.name);
+      const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+      if (duplicates.length > 0 && activeProject && duplicates.includes(activeProject.name)) {
+          return `Warning: You have multiple projects named "${activeProject.name}". Devices might be connected to different projects. Please check the project list and delete duplicates.`;
+      }
+      return null;
+  }, [projects, activeProject]);
 
   const touchProjectTimestamp = async () => {
       if (!user || !activeProjectId) return;
@@ -519,27 +536,49 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         throw new Error("Cannot save: Invalid timestamp generated.");
     }
 
-    // Primary action: Save the log
+    // --- Optimistic Update ---
+    // Create a temporary local entry to make the UI feel instant
+    const tempId = `temp-${Date.now()}`;
+    const optimisticLog: CallLog = {
+        id: tempId,
+        projectId: activeProjectId,
+        ...log,
+        timestamp: newLog.timestamp,
+        followUpCount: 0,
+        isJunk: false
+    };
+
+    setCallLogs(prev => {
+        const updated = [optimisticLog, ...prev];
+        return updated.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    });
+
+    // Primary action: Save the log to Firestore
     const dataToSave: any = {
         ...newLog,
         timestamp: Timestamp.fromDate(logDate),
     };
 
-    // Safely handle callback time
     if (newLog.callbackTime) {
         const cbDate = new Date(newLog.callbackTime);
         if (!isNaN(cbDate.getTime())) {
             dataToSave.callbackTime = Timestamp.fromDate(cbDate);
-        } else {
-            console.warn("Skipping invalid callback time:", newLog.callbackTime);
         }
     }
     
-    // Sanitize to remove any undefined fields before saving
-    await addDoc(collection(db, 'callLogs'), sanitizeFirestoreData(dataToSave));
-    
-    // Secondary action: Touch the timestamp to notify others
-    touchProjectTimestamp();
+    try {
+        await addDoc(collection(db, 'callLogs'), sanitizeFirestoreData(dataToSave));
+        // Note: The onSnapshot listener will eventually fire with the real data (real ID).
+        // It will replace our optimistic log because we replace the whole array.
+        
+        // Secondary action: Touch the timestamp to notify others
+        touchProjectTimestamp();
+    } catch (err) {
+        // Rollback optimistic update if save fails
+        console.error("Failed to save log:", err);
+        setCallLogs(prev => prev.filter(l => l.id !== tempId));
+        throw err; // Re-throw so CallLogger knows it failed
+    }
 
   }, [user, activeProjectId]);
 
@@ -737,6 +776,21 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
             <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 mx-4 sm:mx-6 lg:mx-8 mt-4 shadow-md rounded-r">
                 <p className="font-bold">System Error</p>
                 <p>{permissionError}</p>
+                <div className="mt-4">
+                    <FirestoreRulesMessage />
+                </div>
+            </div>
+        )}
+        
+        {duplicateProjectWarning && !permissionError && (
+             <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 mb-4 mx-4 sm:mx-6 lg:mx-8 mt-4 shadow-md rounded-r flex items-start">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                    <p className="font-bold">Possible Sync Issue</p>
+                    <p>{duplicateProjectWarning}</p>
+                </div>
             </div>
         )}
 
