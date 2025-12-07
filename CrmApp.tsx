@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { db } from './firebase';
+import { db, realtimeDb } from './firebase';
 import {
   collection,
   query,
@@ -15,6 +15,14 @@ import {
   Timestamp,
   setDoc,
 } from 'firebase/firestore';
+import { 
+  ref, 
+  onValue, 
+  onDisconnect, 
+  set, 
+  remove,
+  serverTimestamp as rtdbServerTimestamp
+} from 'firebase/database';
 import { CallLog, CallStatus, Project, IncompleteLog, CallerStats, User, ActiveUser } from './types';
 import Header from './components/Header';
 import CallLogger from './components/CallLogger';
@@ -221,63 +229,59 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
     }
   }, [user, activeProjectId]);
 
-  // 4. Presence Logic (Heartbeat + Listener)
+  // 4. Realtime Presence Logic (Using Realtime Database)
   useEffect(() => {
-      if (!user || !activeProjectId) {
+      if (!user || !activeProjectId || !realtimeDb) {
           setActiveUsers([]);
           return;
       }
 
-      // Heartbeat function to update my own presence
-      const updateMyPresence = async () => {
-          try {
-              const myPresenceRef = doc(db, 'projects', activeProjectId, 'presence', user.uid);
-              await setDoc(myPresenceRef, {
-                  uid: user.uid,
-                  email: user.email,
-                  lastSeen: new Date().toISOString()
-              }, { merge: true });
-          } catch (err) {
-              console.warn("Failed to update presence heartbeat:", err);
-          }
+      const userId = user.uid;
+      const projectRef = ref(realtimeDb, `presence/${activeProjectId}`);
+      const myUserRef = ref(realtimeDb, `presence/${activeProjectId}/${userId}`);
+
+      // Set up presence
+      const setupPresence = async () => {
+          // When I disconnect, remove my node
+          await onDisconnect(myUserRef).remove();
+          // Set my status to online
+          await set(myUserRef, {
+              uid: userId,
+              email: user.email,
+              lastSeen: Date.now() // Use simple timestamp for easy processing
+          });
       };
 
-      // Initial update
-      updateMyPresence();
+      setupPresence();
 
-      // Update every 60 seconds
-      const heartbeatInterval = setInterval(updateMyPresence, 60000);
-
-      // Listen for other users
-      const presenceCol = collection(db, 'projects', activeProjectId, 'presence');
-      const unsubscribePresence = onSnapshot(presenceCol, (snapshot) => {
-          const now = new Date();
+      // Listen for other users in this project
+      const unsubscribe = onValue(projectRef, (snapshot) => {
+          const data = snapshot.val();
           const active: ActiveUser[] = [];
           
-          snapshot.forEach(doc => {
-              const data = doc.data();
-              if (data.lastSeen && data.email) {
-                  const lastSeenDate = new Date(data.lastSeen);
-                  const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / 60000;
-                  // Only count as active if seen in the last 2 minutes
-                  if (diffMinutes < 2) {
-                      active.push({
-                          uid: doc.id,
-                          email: data.email,
-                          lastSeen: data.lastSeen
-                      });
+          if (data) {
+              Object.values(data).forEach((userData: any) => {
+                  if (userData.email && userData.lastSeen) {
+                      // Optional: Filter out stale users if they crashed without onDisconnect firing
+                      // 10 minutes timeout
+                      const isStale = (Date.now() - userData.lastSeen) > 10 * 60 * 1000; 
+                      if (!isStale) {
+                         active.push({
+                              uid: userData.uid,
+                              email: userData.email,
+                              lastSeen: new Date(userData.lastSeen).toISOString()
+                          });
+                      }
                   }
-              }
-          });
-          
-          // Exclude myself from the list I see (optional, but good for "others online")
-          // Currently keeping myself to verify it works, but you could filter: u.uid !== user.uid
+              });
+          }
           setActiveUsers(active);
       });
 
       return () => {
-          clearInterval(heartbeatInterval);
-          unsubscribePresence();
+          // Clean up my presence when component unmounts (e.g. switching projects)
+          remove(myUserRef);
+          unsubscribe();
       };
   }, [user, activeProjectId]);
 

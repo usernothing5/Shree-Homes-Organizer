@@ -2,11 +2,13 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
+import { getDatabase } from "firebase/database";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
   apiKey: "AIzaSyDMGU6S63Is1mDz2B0Lp83-1rV54ocIQmo",
   authDomain: "shreehomescrm-d7c2d.firebaseapp.com",
+  databaseURL: "https://shreehomescrm-d7c2d-default-rtdb.firebaseio.com",
   projectId: "shreehomescrm-d7c2d",
   storageBucket: "shreehomescrm-d7c2d.firebasestorage.app",
   messagingSenderId: "134845887694",
@@ -18,6 +20,7 @@ const firebaseConfig = {
 let app;
 let auth: any;
 let db: any;
+let realtimeDb: any;
 
 export const isConfigured = 
   firebaseConfig.apiKey && 
@@ -31,6 +34,7 @@ if (isConfigured) {
     auth = getAuth(app);
     
     db = getFirestore(app);
+    realtimeDb = getDatabase(app);
 
     // Enable Multi-Tab Offline Persistence.
     // This allows the app to work offline and sync when online, even if multiple tabs are open.
@@ -50,4 +54,4 @@ if (isConfigured) {
   console.warn("Firebase is not configured. Please check firebase.ts");
 }
 
-export { auth, db };
+export { auth, db, realtimeDb };
