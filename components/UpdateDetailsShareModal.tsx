@@ -5,7 +5,7 @@ import { CallLog, CallStatus } from '../types';
 interface UpdateDetailsShareModalProps {
   callLog: CallLog;
   onClose: () => void;
-  onUpdate: (logId: string, updates: { status: CallStatus, notes: string, callbackTime?: string }) => void;
+  onUpdate: (logId: string, updates: { status: CallStatus, notes: string, callbackTime?: string | null }) => void;
 }
 
 const getInitialIndianDateTime = () => {
@@ -40,7 +40,7 @@ const UpdateDetailsShareModal: React.FC<UpdateDetailsShareModalProps> = ({ callL
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const updates: { status: CallStatus, notes: string, callbackTime?: string } = {
+    const updates: { status: CallStatus, notes: string, callbackTime?: string | null } = {
         status: newStatus,
         notes: notes.trim(),
     };
@@ -59,6 +59,9 @@ const UpdateDetailsShareModal: React.FC<UpdateDetailsShareModalProps> = ({ callL
         const [year, month, day] = callbackDate.split('-').map(Number);
         const combinedDateTime = new Date(year, month - 1, day, hour24, Number(callbackMinute));
         updates.callbackTime = combinedDateTime.toISOString();
+    } else {
+        // Explicitly clear the callback time if no new time is set.
+        updates.callbackTime = null;
     }
     
     onUpdate(callLog.id, updates);
