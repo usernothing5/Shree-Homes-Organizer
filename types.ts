@@ -51,3 +51,9 @@ export interface CallerStats {
   interestedClients: number;
   notInterestedClients: number;
 }
+
+export interface ActiveUser {
+  uid: string;
+  email: string;
+  lastSeen: string; // ISO
+}

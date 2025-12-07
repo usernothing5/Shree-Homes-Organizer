@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Project } from '../types';
+import { Project, ActiveUser } from '../types';
 
 interface HeaderProps {
   projects: Project[];
@@ -12,6 +12,7 @@ interface HeaderProps {
   hasNewerData?: boolean;
   onSyncNewest?: () => void;
   isOnline: boolean;
+  activeUsers?: ActiveUser[];
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -23,7 +24,8 @@ const Header: React.FC<HeaderProps> = ({
     userEmail,
     hasNewerData,
     onSyncNewest,
-    isOnline
+    isOnline,
+    activeUsers = []
 }) => {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -57,6 +59,16 @@ const Header: React.FC<HeaderProps> = ({
       return date.toLocaleDateString();
   };
 
+  // Generate a consistent color based on string
+  const stringToColor = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const c = (hash & 0x00ffffff).toString(16).toUpperCase();
+    return '#' + '00000'.substring(0, 6 - c.length) + c;
+  };
+
   return (
     <header className="bg-slate-800 shadow-md transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-y-2">
@@ -66,11 +78,34 @@ const Header: React.FC<HeaderProps> = ({
           </svg>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-none">Shree Homes</h1>
-            <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`inline-block h-2 w-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></span>
-                <span className="text-xs text-slate-300 font-medium uppercase tracking-wide">
-                    {isOnline ? 'Online' : 'Offline'}
-                </span>
+            <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-1.5">
+                    <span className={`inline-block h-2 w-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></span>
+                    <span className="text-xs text-slate-300 font-medium uppercase tracking-wide">
+                        {isOnline ? 'Online' : 'Offline'}
+                    </span>
+                </div>
+                
+                {/* Active Users Display */}
+                {activeUsers.length > 0 && (
+                    <div className="flex -space-x-2 overflow-hidden ml-2 items-center">
+                        {activeUsers.slice(0, 4).map((u) => (
+                            <div 
+                                key={u.uid} 
+                                className="inline-block h-6 w-6 rounded-full ring-2 ring-slate-800 bg-white flex items-center justify-center text-[10px] font-bold text-slate-700"
+                                title={`${u.email} is online`}
+                                style={{ backgroundColor: stringToColor(u.email), color: '#fff' }}
+                            >
+                                {u.email.charAt(0).toUpperCase()}
+                            </div>
+                        ))}
+                        {activeUsers.length > 4 && (
+                            <div className="inline-block h-6 w-6 rounded-full ring-2 ring-slate-800 bg-slate-600 flex items-center justify-center text-[9px] text-white font-medium">
+                                +{activeUsers.length - 4}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
           </div>
         </div>

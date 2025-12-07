@@ -13,8 +13,9 @@ import {
   where,
   getDocs,
   Timestamp,
+  setDoc,
 } from 'firebase/firestore';
-import { CallLog, CallStatus, Project, IncompleteLog, CallerStats, User } from './types';
+import { CallLog, CallStatus, Project, IncompleteLog, CallerStats, User, ActiveUser } from './types';
 import Header from './components/Header';
 import CallLogger from './components/CallLogger';
 import Stats from './components/Stats';
@@ -31,7 +32,7 @@ import ImportStatusModal, { ImportResults } from './components/ImportStatusModal
 import ImportReviewModal from './components/ImportReviewModal';
 import CallerPerformance, { DailyCallerOverrides } from './components/CallerPerformance';
 import ConfirmVisitStatusModal from './components/ConfirmVisitStatusModal';
-import FirestoreRulesMessage from './components/FirestoreRulesMessage'; // Ensure this is imported if not already
+import FirestoreRulesMessage from './components/FirestoreRulesMessage';
 
 
 type LogUpdatePayload = {
@@ -70,6 +71,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [statOverrides, setStatOverrides] = useState<StatOverrides>({});
+  const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
 
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [permissionError, setPermissionError] = useState<string | null>(null);
@@ -217,6 +219,66 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
         unsubscribeLogs();
         unsubscribeOverrides();
     }
+  }, [user, activeProjectId]);
+
+  // 4. Presence Logic (Heartbeat + Listener)
+  useEffect(() => {
+      if (!user || !activeProjectId) {
+          setActiveUsers([]);
+          return;
+      }
+
+      // Heartbeat function to update my own presence
+      const updateMyPresence = async () => {
+          try {
+              const myPresenceRef = doc(db, 'projects', activeProjectId, 'presence', user.uid);
+              await setDoc(myPresenceRef, {
+                  uid: user.uid,
+                  email: user.email,
+                  lastSeen: new Date().toISOString()
+              }, { merge: true });
+          } catch (err) {
+              console.warn("Failed to update presence heartbeat:", err);
+          }
+      };
+
+      // Initial update
+      updateMyPresence();
+
+      // Update every 60 seconds
+      const heartbeatInterval = setInterval(updateMyPresence, 60000);
+
+      // Listen for other users
+      const presenceCol = collection(db, 'projects', activeProjectId, 'presence');
+      const unsubscribePresence = onSnapshot(presenceCol, (snapshot) => {
+          const now = new Date();
+          const active: ActiveUser[] = [];
+          
+          snapshot.forEach(doc => {
+              const data = doc.data();
+              if (data.lastSeen && data.email) {
+                  const lastSeenDate = new Date(data.lastSeen);
+                  const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / 60000;
+                  // Only count as active if seen in the last 2 minutes
+                  if (diffMinutes < 2) {
+                      active.push({
+                          uid: doc.id,
+                          email: data.email,
+                          lastSeen: data.lastSeen
+                      });
+                  }
+              }
+          });
+          
+          // Exclude myself from the list I see (optional, but good for "others online")
+          // Currently keeping myself to verify it works, but you could filter: u.uid !== user.uid
+          setActiveUsers(active);
+      });
+
+      return () => {
+          clearInterval(heartbeatInterval);
+          unsubscribePresence();
+      };
   }, [user, activeProjectId]);
 
   const activeProject = useMemo(() => projects.find(p => p.id === activeProjectId), [projects, activeProjectId]);
@@ -771,6 +833,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           hasNewerData={hasNewerData}
           onSyncNewest={handleSyncNewest}
           isOnline={isOnline}
+          activeUsers={activeUsers}
         />
         
         {permissionError && (
