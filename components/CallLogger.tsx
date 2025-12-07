@@ -73,7 +73,9 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   const [callbackPeriod, setCallbackPeriod] = useState<'AM' | 'PM'>('AM');
   const [notes, setNotes] = useState('');
   const [visitWon, setVisitWon] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  
+  // Replaced 'isSaving' with 'cooldown' to allow background saves while blocking immediate re-submit
+  const [cooldown, setCooldown] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   
   const isMounted = useRef(true);
@@ -98,10 +100,10 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
   }, [status, callbackDate]);
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isReady) return;
+    if (!isReady || cooldown) return;
 
     if (!callerName.trim()) {
       alert('Please enter the caller name.');
@@ -163,54 +165,53 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         }
     }
 
-    setIsSaving(true);
-    setSaveMessage(null);
+    // --- BACKGROUND SAVE START ---
+    // We do NOT await this. We let it run in the background.
+    addCallLog(log).catch(error => {
+        console.error("Background save failed:", error);
+        // Alert the user if the background process actually fails so they know data might be lost
+        alert(`Warning: The log for "${log.clientName}" failed to save in the background. Please check your connection.`);
+    });
+    // --- BACKGROUND SAVE END ---
 
-    try {
-        await addCallLog(log);
-        
+    // --- OPTIMISTIC UPDATE ---
+    // Reset form immediately
+    setClientName('');
+    setClientPhone('');
+    setStatus(CallStatus.Interested);
+    setCallbackDate('');
+    setCallbackHour('');
+    setCallbackMinute('');
+    setCallbackPeriod('AM');
+    setNotes('');
+    setVisitWon(false);
+    setSource(SOURCE_OPTIONS[0]);
+    setSourceDetails('');
+    
+    // --- 3 SECOND RULE ---
+    setCooldown(true);
+    setSaveMessage('Saved successfully!');
+    
+    setTimeout(() => {
         if (isMounted.current) {
-            setClientName('');
-            setClientPhone('');
-            setStatus(CallStatus.Interested);
-            setCallbackDate('');
-            setCallbackHour('');
-            setCallbackMinute('');
-            setCallbackPeriod('AM');
-            setNotes('');
-            setVisitWon(false);
-            setSource(SOURCE_OPTIONS[0]);
-            setSourceDetails('');
-            
-            setSaveMessage('Saved successfully!');
-            setTimeout(() => {
-                if (isMounted.current) setSaveMessage(null);
-            }, 3000);
+            setCooldown(false);
+            setSaveMessage(null);
         }
-    } catch (error: any) {
-        console.error("Error saving log:", error);
-        alert(`Failed to save log: ${error.message || 'Unknown error'}`);
-    } finally {
-        if (isMounted.current) {
-            setIsSaving(false);
-        }
-    }
+    }, 3000);
   };
 
   const hourOptions = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
   const minuteOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
   const getButtonText = () => {
-      if (isSaving) return 'Saving...';
+      if (cooldown) return saveMessage || 'Saved!';
       if (!isReady) return 'Initializing...';
-      if (saveMessage) return saveMessage;
       return 'Save Call Log';
   };
 
   const getButtonColor = () => {
-      if (isSaving) return 'bg-sky-600';
-      if (saveMessage) return 'bg-green-600 hover:bg-green-700';
-      return 'bg-sky-600 hover:bg-sky-700';
+      if (cooldown) return 'bg-green-600 hover:bg-green-700'; // Success green during cooldown
+      return 'bg-sky-600 hover:bg-sky-700'; // Default blue
   };
 
   const showVisitToggle = [
@@ -402,7 +403,7 @@ const CallLogger: React.FC<CallLoggerProps> = ({ addCallLog, isReady, projectNam
         </div>
         <button
           type="submit"
-          disabled={isSaving || !isReady}
+          disabled={!isReady || cooldown}
           className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 ${getButtonColor()}`}
         >
           {getButtonText()}
