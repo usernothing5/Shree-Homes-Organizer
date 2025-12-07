@@ -96,8 +96,8 @@ const Header: React.FC<HeaderProps> = ({
             >
               <span className="truncate">{activeProject?.name || 'Loading...'}</span>
               {activeProject && (
-                  <span className="hidden sm:inline-block text-xs text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600">
-                    ID: {activeProject.id.slice(0, 4)}
+                  <span className="hidden sm:inline-block text-xs text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 font-mono">
+                    ID: {activeProject.id.slice(0, 4)}...
                   </span>
               )}
               <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform ${isProjectDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
@@ -121,7 +121,7 @@ const Header: React.FC<HeaderProps> = ({
                     >
                       <div className="flex flex-col overflow-hidden">
                         <span className="truncate">{project.name}</span>
-                        <span className="text-xs text-slate-400 font-mono">ID: {project.id.slice(0, 8)}...</span>
+                        <span className="text-xs text-slate-400 font-mono">ID: {project.id}</span>
                       </div>
                       {project.lastUpdated && (
                           <span className="text-xs text-slate-400 ml-2 flex-shrink-0">

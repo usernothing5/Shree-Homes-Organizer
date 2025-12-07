@@ -706,6 +706,7 @@ const CrmApp: React.FC<CrmAppProps> = ({ user, onSignOut }) => {
           activeProjectId={activeProjectId || ''}
           onAddProject={handleAddProject}
           onDeleteProject={handleDeleteProject}
+          onJoinProject={handleSwitchProject}
           onClose={() => setIsManageProjectsModalOpen(false)}
         />
       )}
